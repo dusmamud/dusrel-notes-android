@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Notes" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/notes_blue</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

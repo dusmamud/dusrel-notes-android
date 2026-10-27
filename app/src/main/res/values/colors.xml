@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Original Notes tokens -->
+    <color name="notes_blue">#2F6FED</color>
+    <color name="notes_blue_dark">#7FB0FF</color>
+    <color name="notes_ink">#1A1C21</color>
+    <color name="notes_paper">#F7F8FA</color>
+    <color name="notes_card_dark">#23262E</color>
+    <color name="notes_background_dark">#14161B</color>
+</resources>

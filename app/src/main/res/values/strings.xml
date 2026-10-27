@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Notes</string>
+    <string name="reminder_notification_title">Note reminder</string>
+    <string name="widget_notes_list_label">Notes list</string>
+    <string name="widget_quick_note_label">Quick note</string>
+    <string name="widget_open_notes">Open Notes</string>
+    <string name="widget_new_note">New note</string>
+    <string name="widget_quick_note">Quick note</string>
+    <string name="widget_title">Notes</string>
+</resources>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original simple note glyph: a folded page with two writing lines. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,22 L66,22 L78,34 L78,86 L34,86 Z" />
+    <path
+        android:fillColor="#2F6FED"
+        android:pathData="M66,22 L78,34 L66,34 Z" />
+    <path
+        android:fillColor="#2F6FED"
+        android:pathData="M42,48 L70,48 L70,53 L42,53 Z" />
+    <path
+        android:fillColor="#2F6FED"
+        android:pathData="M42,60 L70,60 L70,65 L42,65 Z" />
+    <path
+        android:fillColor="#2F6FED"
+        android:pathData="M42,72 L58,72 L58,77 L42,77 Z" />
+</vector>
