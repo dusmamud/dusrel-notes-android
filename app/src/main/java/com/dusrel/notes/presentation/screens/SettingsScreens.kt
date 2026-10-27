@@ -24,16 +24,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dusrel.notes.data.local.ThemeSetting
 import com.dusrel.notes.presentation.viewmodel.NotesViewModel
-import java.util.Locale
 import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(viewModel: NotesViewModel, onOpenAbout: () -> Unit, onOpenPrivate: () -> Unit) {
     val context = LocalContext.current
+    // Observable locale (see EditorScreen): recomposes on config change.
+    val locale = LocalConfiguration.current.locales[0]
     val scope = rememberCoroutineScope()
     val theme by viewModel.theme.collectAsState()
     var message by remember { mutableStateOf("") }
@@ -69,7 +71,7 @@ fun SettingsScreen(viewModel: NotesViewModel, onOpenAbout: () -> Unit, onOpenPri
         }
         Text("Language", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp))
         Text(
-            "Current language: " + Locale.getDefault().displayLanguage +
+            "Current language: " + locale.displayLanguage +
                 ". Notes follows your device language; no separate translations are shipped yet.",
             style = MaterialTheme.typography.bodyMedium
         )

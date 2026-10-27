@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -410,6 +411,8 @@ fun RemindersScreen(viewModel: NotesViewModel, onOpenNote: (Long) -> Unit) {
     val notes by viewModel.notes.collectAsState()
     val unlocked by viewModel.privateUnlocked.collectAsState()
     val context = LocalContext.current
+    // Observable locale (see EditorScreen): recomposes on config change.
+    val locale = LocalConfiguration.current.locales[0]
     val reminderScheduler = remember {
         ReminderScheduler(
             ExactAlarmScheduler(context),
@@ -439,7 +442,7 @@ fun RemindersScreen(viewModel: NotesViewModel, onOpenNote: (Long) -> Unit) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(note.title.ifBlank { "(Untitled)" }, style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault())
+                                    java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", locale)
                                         .format(java.util.Date(note.reminderTime!!)),
                                     style = MaterialTheme.typography.bodyMedium
                                 )

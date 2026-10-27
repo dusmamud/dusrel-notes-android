@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +63,9 @@ fun EditorScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    // Observable locale: LocalConfiguration recomposes on config change, so
+    // this satisfies Lint's NonObservableLocale check.
+    val locale = LocalConfiguration.current.locales[0]
     val folders by viewModel.folders.collectAsState()
     var note by remember { mutableStateOf<Note?>(null) }
     var title by remember { mutableStateOf("") }
@@ -245,7 +249,7 @@ fun EditorScreen(
             if (n.reminderTime != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Reminder: " + java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault())
+                        "Reminder: " + java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", locale)
                             .format(java.util.Date(n.reminderTime!!)),
                         style = MaterialTheme.typography.bodyMedium
                     )
