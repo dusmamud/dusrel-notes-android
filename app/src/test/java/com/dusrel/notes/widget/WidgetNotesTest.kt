@@ -2,6 +2,7 @@ package com.dusrel.notes.widget
 
 import com.dusrel.notes.domain.model.Note
 import com.dusrel.notes.domain.widget.WIDGET_SNIPPET_MAX_LENGTH
+import com.dusrel.notes.domain.widget.widgetMetaLine
 import com.dusrel.notes.domain.widget.widgetNotes
 import com.dusrel.notes.domain.widget.widgetSnippet
 import org.junit.Assert.assertEquals
@@ -48,5 +49,17 @@ class WidgetNotesTest {
 
     @Test fun emptyListYieldsZeroItems() {
         assertTrue(widgetNotes(emptyList()).isEmpty())
+    }
+
+    @Test fun rowCarriesDateAndPinIndicator() {
+        val notes = listOf(
+            Note(id = 1, title = "Pinned", content = "a", pinned = true, updatedAt = 1000),
+            Note(id = 2, title = "Plain", content = "b", updatedAt = 2000),
+        )
+        val items = widgetNotes(notes, formatDate = { millis -> "d$millis" })
+        assertEquals("Pinned • d1000", widgetMetaLine(items.first { it.id == 1L }))
+        assertEquals("d2000", widgetMetaLine(items.first { it.id == 2L }))
+        // Default formatter yields no date; the unpinned row's meta is empty.
+        assertEquals("", widgetMetaLine(widgetNotes(notes).first { it.id == 2L }))
     }
 }

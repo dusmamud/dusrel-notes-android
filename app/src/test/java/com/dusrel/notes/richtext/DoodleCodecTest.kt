@@ -28,4 +28,17 @@ class DoodleCodecTest {
         assertEquals(1, decoded.size)
         assertEquals(3f, decoded[0].points[0].x, 0.001f)
     }
+
+    @Test fun widthRoundTripsAndOldFormatDefaultsTo6() {
+        val strokes = listOf(
+            DoodleStroke(1, listOf(DoodlePoint(0f, 0f), DoodlePoint(1f, 1f)), 12f),
+            DoodleStroke(2, listOf(DoodlePoint(2f, 2f)), 3f),
+        )
+        val decoded = DoodleCodec.decode(DoodleCodec.encode(strokes))
+        assertEquals(strokes, decoded)
+        // Old format without a "w" field (as stored before this change).
+        val old = DoodleCodec.decode("[{\"c\":5,\"p\":[[1.0,2.0],[3.0,4.0]]}]")
+        assertEquals(1, old.size)
+        assertEquals(6f, old[0].width, 0.001f)
+    }
 }

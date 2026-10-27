@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,10 +50,12 @@ fun DoodleCanvas(
 ) {
     var strokes by remember(initialData) { mutableStateOf(DoodleCodec.decode(initialData)) }
     var currentColor by remember { mutableStateOf(Color(0xFF1A1C21)) }
+    var currentWidth by remember { mutableStateOf(6f) }
     val palette = listOf(
         Color(0xFF1A1C21), Color(0xFFD32F2F), Color(0xFF2F6FED),
         Color(0xFF2E7D32), Color(0xFFF9A825), Color(0xFF7B1FA2),
     )
+    val widths = listOf("Thin" to 3f, "Medium" to 6f, "Wide" to 12f)
     Column(modifier = modifier) {
         Row(modifier = Modifier.padding(bottom = 8.dp)) {
             palette.forEach { c ->
@@ -64,6 +68,16 @@ fun DoodleCanvas(
                     )
                 }
             }
+            // Undo removes only the last stroke — no eraser tool, so a stroke
+            // can never be partly erased or its stored data damaged.
+            IconButton(onClick = {
+                if (strokes.isNotEmpty()) {
+                    strokes = strokes.dropLast(1)
+                    onStrokesChanged(DoodleCodec.encode(strokes))
+                }
+            }, modifier = Modifier.padding(start = 4.dp)) {
+                SymbolIcon(Symbols.UNDO, size = 20.sp)
+            }
             Button(onClick = {
                 strokes = emptyList()
                 onStrokesChanged("")
@@ -72,17 +86,28 @@ fun DoodleCanvas(
                 Text("Clear", modifier = Modifier.padding(start = 4.dp))
             }
         }
+        Row(modifier = Modifier.padding(bottom = 8.dp)) {
+            Text("Width: ", modifier = Modifier.padding(top = 10.dp, end = 4.dp))
+            widths.forEach { (label, w) ->
+                if (w == currentWidth) {
+                    Button(onClick = { currentWidth = w }, modifier = Modifier.padding(end = 4.dp)) { Text(label) }
+                } else {
+                    OutlinedButton(onClick = { currentWidth = w }, modifier = Modifier.padding(end = 4.dp)) { Text(label) }
+                }
+            }
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(320.dp)
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.surface)
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { offset ->
                             strokes = strokes + DoodleStroke(
                                 currentColor.toArgb(),
-                                listOf(DoodlePoint(offset.x, offset.y))
+                                listOf(DoodlePoint(offset.x, offset.y)),
+                                currentWidth,
                             )
                         },
                         onDrag = { change, _ ->
@@ -91,13 +116,7 @@ fun DoodleCanvas(
                                 points = last.points + DoodlePoint(change.position.x, change.position.y)
                             )
                             strokes = strokes.dropLast(1) + updated
-                            onStrokesChanged(
-                                DoodleCodec.encode(
-                                    strokes.map { s ->
-                                        DoodleStroke(s.color, s.points)
-                                    }
-                                )
-                            )
+                            onStrokesChanged(DoodleCodec.encode(strokes))
                         },
                         onDragEnd = {
                             onStrokesChanged(DoodleCodec.encode(strokes))
@@ -109,7 +128,7 @@ fun DoodleCanvas(
                 strokes.forEach { stroke ->
                     if (stroke.points.size < 2) {
                         stroke.points.firstOrNull()?.let { p ->
-                            drawCircle(Color(stroke.color), radius = 4f, center = Offset(p.x, p.y))
+                            drawCircle(Color(stroke.color), radius = stroke.width / 2, center = Offset(p.x, p.y))
                         }
                     } else {
                         val path = Path()
@@ -117,7 +136,7 @@ fun DoodleCanvas(
                         stroke.points.drop(1).forEach { path.lineTo(it.x, it.y) }
                         drawPath(
                             path, Color(stroke.color),
-                            style = Stroke(width = 6f, cap = StrokeCap.Round)
+                            style = Stroke(width = stroke.width, cap = StrokeCap.Round)
                         )
                     }
                 }

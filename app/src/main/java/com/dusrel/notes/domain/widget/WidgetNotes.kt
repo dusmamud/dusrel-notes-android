@@ -12,7 +12,19 @@ data class WidgetNoteItem(
     val id: Long,
     val title: String,
     val snippet: String,
+    /** Formatted updated date supplied by the caller ("" = unknown). */
+    val dateText: String = "",
+    val pinned: Boolean = false,
 )
+
+/** Row meta line: pin indicator plus date, e.g. "Pinned • 12 Oct 2026". */
+fun widgetMetaLine(item: WidgetNoteItem): String {
+    val parts = listOfNotNull(
+        if (item.pinned) "Pinned" else null,
+        item.dateText.ifBlank { null },
+    )
+    return parts.joinToString(" • ")
+}
 
 /**
  * Snippet for one note: all whitespace runs (including newlines) collapsed to a
@@ -34,8 +46,21 @@ fun widgetSnippet(content: String): String {
  * exactly pinned-desc then updatedAt-desc, so no second sort implementation.
  * Titles are passed through verbatim (no "Untitled" fallback invented here).
  */
-fun widgetNotes(notes: List<Note>): List<WidgetNoteItem> =
+/**
+ * The [formatDate] caller formats [Note.updatedAt] for display; the default
+ * yields no date so pure-JVM callers that do not care about dates stay simple.
+ * The widget service passes a real formatter (see NotesWidgetService).
+ */
+fun widgetNotes(
+    notes: List<Note>,
+    formatDate: (Long) -> String = { "" },
+): List<WidgetNoteItem> =
     sortNotes(
         notes.filter { !it.isPrivate && !it.trashed && !it.archived },
         SortOrder.PINNED_FIRST,
-    ).map { note -> WidgetNoteItem(note.id, note.title, widgetSnippet(note.content)) }
+    ).map { note ->
+        WidgetNoteItem(
+            note.id, note.title, widgetSnippet(note.content),
+            dateText = formatDate(note.updatedAt), pinned = note.pinned,
+        )
+    }

@@ -49,6 +49,8 @@ class NotesListWidgetProvider : AppWidgetProvider() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 ),
             )
+            // Shown by the list view itself when the adapter has zero rows.
+            views.setEmptyView(R.id.widget_notes_list_view, R.id.widget_notes_empty_view)
             manager.updateAppWidget(id, views)
         }
     }

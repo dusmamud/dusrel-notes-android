@@ -2,7 +2,10 @@ package com.dusrel.notes.domain.doodle
 
 /** Pure doodle serialisation: strokes -> compact JSON string and back. */
 data class DoodlePoint(val x: Float, val y: Float)
-data class DoodleStroke(val color: Int, val points: List<DoodlePoint>)
+
+/** [width] is the stroke width in px; 6f is the historic default, so old
+ *  data without a width field decodes exactly as before. */
+data class DoodleStroke(val color: Int, val points: List<DoodlePoint>, val width: Float = 6f)
 
 object DoodleCodec {
     fun encode(strokes: List<DoodleStroke>): String {
@@ -15,7 +18,7 @@ object DoodleCodec {
                 if (pi > 0) sb.append(',')
                 sb.append('[').append(p.x).append(',').append(p.y).append(']')
             }
-            sb.append("]}")
+            sb.append("],\"w\":").append(s.width).append('}')
         }
         return sb.append(']').toString()
     }
@@ -62,7 +65,18 @@ object DoodleCodec {
                     points += DoodlePoint(x, y)
                 } else break
             }
-            out += DoodleStroke(color, points)
+            // Optional width field (new format); old data has none -> 6f.
+            var width = 6f
+            skipWs()
+            if (i < data.length && data[i] == ','
+                && data.substring(i).startsWith(",\"w\"")
+            ) {
+                i = data.indexOf(':', i) + 1
+                width = readNumber()
+                skipWs()
+                if (i < data.length && data[i] == '}') i++
+            }
+            out += DoodleStroke(color, points, width)
             skipWs()
             if (i < data.length && data[i] == ',') { i++; continue }
             if (i < data.length && data[i] == ']') break

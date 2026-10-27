@@ -1,6 +1,10 @@
 package com.dusrel.notes.presentation.screens
 
-import androidx.compose.foundation.clickable
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,7 +42,11 @@ import androidx.compose.ui.unit.sp
 import com.dusrel.notes.data.work.ExactAlarmScheduler
 import com.dusrel.notes.data.work.cancelReminder
 import com.dusrel.notes.data.work.scheduleReminder
+import com.dusrel.notes.domain.list.listMetaLine
+import com.dusrel.notes.domain.list.listSnippet
+import com.dusrel.notes.domain.list.todoProgressLabel
 import com.dusrel.notes.domain.model.Note
+import com.dusrel.notes.domain.model.TodoItem
 import com.dusrel.notes.domain.reminder.ReminderAlarmScheduler
 import com.dusrel.notes.domain.reminder.ReminderScheduler
 import com.dusrel.notes.domain.model.NoteType
@@ -75,9 +83,25 @@ fun NotesListScreen(
     val tab by viewModel.listTab.collectAsState()
     val sort by viewModel.sortOrder.collectAsState()
     val folderFilter by viewModel.folderFilterId.collectAsState()
+    val todosByNote by viewModel.todosByNote.collectAsState()
+    // Observable locale (see EditorScreen): recomposes on config change.
+    val locale = LocalConfiguration.current.locales[0]
     var showCreateDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<Note?>(null) }
+    var longPressNote by remember { mutableStateOf<Note?>(null) }
+    var moveFolderNote by remember { mutableStateOf<Note?>(null) }
+    val shareLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    fun shareNote(note: Note) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(
+                Intent.EXTRA_TEXT,
+                viewModel.noteToShareText(note, todosByNote[note.id].orEmpty()),
+            )
+        }
+        shareLauncher.launch(Intent.createChooser(intent, "Share note"))
+    }
     // Room's Flow starts empty, so an empty database looks like "loading".
     // Show the loading text only briefly, then fall through to the empty state.
     val hasLoaded = remember { mutableStateOf(false) }
@@ -130,17 +154,38 @@ fun NotesListScreen(
         if (!hasLoaded.value && notes.isEmpty()) {
             Text("Loading notes…", modifier = Modifier.padding(top = 24.dp), style = MaterialTheme.typography.bodyLarge)
         } else if (notes.isEmpty()) {
-            Column(modifier = Modifier.padding(top = 32.dp)) {
-                SymbolIcon(Symbols.DESCRIPTION, size = 48.sp)
-                Text("Nothing here yet", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
-                Text(
-                    when (tab) {
-                        ListTab.TRASH -> "Trash is empty. Deleted notes can be restored from here."
-                        ListTab.ARCHIVED -> "No archived notes."
-                        else -> "Tap + below to write your first note, checklist, or doodle."
-                    },
-                    style = MaterialTheme.typography.bodyMedium
-                )
+            if (query.isNotBlank()) {
+                // Search no-results: distinct copy naming the query, with a
+                // Clear-search action — not the generic "Nothing here yet".
+                Column(modifier = Modifier.padding(top = 32.dp)) {
+                    SymbolIcon(Symbols.SEARCH, size = 48.sp)
+                    Text(
+                        "No results for \"$query\"",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        "Try a different word, or check another folder or tab.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(
+                        onClick = { viewModel.query.value = "" },
+                        modifier = Modifier.padding(top = 12.dp),
+                    ) { Text("Clear search") }
+                }
+            } else {
+                Column(modifier = Modifier.padding(top = 32.dp)) {
+                    SymbolIcon(Symbols.DESCRIPTION, size = 48.sp)
+                    Text("Nothing here yet", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
+                    Text(
+                        when (tab) {
+                            ListTab.TRASH -> "Trash is empty. Deleted notes can be restored from here."
+                            ListTab.ARCHIVED -> "No archived notes."
+                            else -> "Tap + below to write your first note, checklist, or doodle."
+                        },
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         } else {
             LazyColumn(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
@@ -148,7 +193,10 @@ fun NotesListScreen(
                     NoteCard(
                         note = note,
                         tab = tab,
+                        todos = todosByNote[note.id].orEmpty(),
+                        locale = locale,
                         onOpen = { onOpenNote(note.id) },
+                        onLongPress = { longPressNote = note },
                         onPin = { viewModel.togglePin(note) },
                         onArchive = { viewModel.setArchived(note, true) },
                         onUnarchive = { viewModel.setArchived(note, false) },
@@ -204,13 +252,66 @@ fun NotesListScreen(
             dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Keep") } }
         )
     }
+    // Long-press actions: only actions that already exist elsewhere
+    // (card buttons / editor), no new actions or permissions.
+    longPressNote?.let { note ->
+        AlertDialog(
+            onDismissRequest = { longPressNote = null },
+            title = { Text(note.title.ifBlank { "(Untitled)" }) },
+            text = {
+                Column {
+                    when (tab) {
+                        ListTab.ACTIVE -> {
+                            TextButton(onClick = { viewModel.togglePin(note); longPressNote = null }) {
+                                Text(if (note.pinned) "Unpin" else "Pin")
+                            }
+                            TextButton(onClick = { viewModel.setArchived(note, true); longPressNote = null }) { Text("Archive") }
+                            TextButton(onClick = { viewModel.moveToTrash(note); reminderScheduler.cancelAll(note.id); longPressNote = null }) { Text("Move to trash") }
+                        }
+                        ListTab.ARCHIVED -> {
+                            TextButton(onClick = { viewModel.setArchived(note, false); longPressNote = null }) { Text("Unarchive") }
+                            TextButton(onClick = { viewModel.moveToTrash(note); reminderScheduler.cancelAll(note.id); longPressNote = null }) { Text("Move to trash") }
+                        }
+                        ListTab.TRASH -> {
+                            TextButton(onClick = { viewModel.restoreFromTrash(note); longPressNote = null }) { Text("Restore") }
+                            TextButton(onClick = { confirmDelete = note; longPressNote = null }) { Text("Delete permanently") }
+                        }
+                    }
+                    if (tab != ListTab.TRASH) {
+                        TextButton(onClick = { moveFolderNote = note; longPressNote = null }) { Text("Move to folder") }
+                        TextButton(onClick = { shareNote(note); longPressNote = null }) { Text("Share") }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { longPressNote = null }) { Text("Close") } }
+        )
+    }
+    moveFolderNote?.let { note ->
+        AlertDialog(
+            onDismissRequest = { moveFolderNote = null },
+            title = { Text("Move to folder") },
+            text = {
+                Column {
+                    TextButton(onClick = { viewModel.moveToFolder(note, null); moveFolderNote = null }) { Text("No folder") }
+                    folders.forEach { folder ->
+                        TextButton(onClick = { viewModel.moveToFolder(note, folder.id); moveFolderNote = null }) { Text(folder.name) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { moveFolderNote = null }) { Text("Close") } }
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NoteCard(
     note: Note,
     tab: ListTab,
+    todos: List<TodoItem>,
+    locale: java.util.Locale,
     onOpen: () -> Unit,
+    onLongPress: () -> Unit,
     onPin: () -> Unit,
     onArchive: () -> Unit,
     onUnarchive: () -> Unit,
@@ -219,7 +320,8 @@ private fun NoteCard(
     onDelete: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onOpen() },
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            .combinedClickable(onClick = { onOpen() }, onLongClick = { onLongPress() }),
         colors = CardDefaults.cardColors(
             containerColor = if (note.color != 0) Color(note.color) else MaterialTheme.colorScheme.surface
         )
@@ -242,8 +344,17 @@ private fun NoteCard(
                 if (note.isPrivate) SymbolIcon(Symbols.LOCK, size = 18.sp)
                 if (note.reminderTime != null) SymbolIcon(Symbols.ALARM, size = 18.sp)
             }
-            val preview = note.content.lines().firstOrNull()?.take(120) ?: ""
+            val preview = listSnippet(note)
             if (preview.isNotBlank()) Text(preview, style = MaterialTheme.typography.bodyMedium)
+            // Updated date, plus checklist progress for TODO notes.
+            val dateText = java.text.SimpleDateFormat("dd MMM yyyy", locale)
+                .format(java.util.Date(note.updatedAt))
+            val progress = if (note.type == NoteType.TODO) todoProgressLabel(todos) else null
+            Text(
+                listMetaLine(dateText, progress),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
             Row {
                 when (tab) {
                     ListTab.ACTIVE -> {
@@ -341,7 +452,12 @@ fun PrivateScreen(viewModel: NotesViewModel, onOpenNote: (Long) -> Unit) {
             unlocked -> {
                 val privateNotes = notes.filter { it.isPrivate && !it.trashed }
                 if (privateNotes.isEmpty()) {
-                    Text("No private notes yet. Mark a note Private in its editor.", modifier = Modifier.padding(top = 24.dp))
+                    // Same icon + title styling as the other empty states.
+                    Column(modifier = Modifier.padding(top = 32.dp)) {
+                        SymbolIcon(Symbols.LOCK, size = 48.sp)
+                        Text("No private notes yet", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
+                        Text("Mark a note Private in its editor.", style = MaterialTheme.typography.bodyMedium)
+                    }
                 } else {
                     LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
                         items(privateNotes, key = { it.id }) { note ->

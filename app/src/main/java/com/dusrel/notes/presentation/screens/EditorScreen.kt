@@ -71,6 +71,7 @@ fun EditorScreen(
     var title by remember { mutableStateOf("") }
     var doc by remember { mutableStateOf<RichDocument?>(null) }
     var showFolderDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     var showReminderInfo by remember { mutableStateOf(false) }
     var reminderPathLabel by remember { mutableStateOf<String?>(null) }
     // Exact-alarm scheduler with the WorkManager fallback (kept, not deleted).
@@ -171,9 +172,25 @@ fun EditorScreen(
 
     LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         item {
+            // Single back affordance: the Scaffold TopAppBar back button in
+            // MainActivity. The old in-screen ARROW_BACK row is removed.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { SymbolIcon(Symbols.ARROW_BACK) }
-                Text("Edit note", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = {
+                    note = n.copy(archived = !n.archived)
+                    viewModel.setArchived(n, !n.archived)
+                }) {
+                    SymbolIcon(if (n.archived) Symbols.UNARCHIVE else Symbols.ARCHIVE)
+                }
+                IconButton(onClick = {
+                    if (n.trashed) {
+                        showDeleteConfirm = true
+                    } else {
+                        viewModel.moveToTrash(n)
+                        reminderScheduler.cancelAll(n.id)
+                        onBack()
+                    }
+                }) { SymbolIcon(Symbols.DELETE) }
                 IconButton(onClick = {
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -183,6 +200,13 @@ fun EditorScreen(
                 }) { SymbolIcon(Symbols.SHARE) }
                 IconButton(onClick = { exportLauncher.launch("note-${n.id}.json") }) { SymbolIcon(Symbols.DOWNLOAD) }
             }
+            val dateFormat = java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", locale)
+            Text(
+                "Created " + dateFormat.format(java.util.Date(n.createdAt)) +
+                    " • Updated " + dateFormat.format(java.util.Date(n.updatedAt)),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it; persist() },
@@ -328,6 +352,24 @@ fun EditorScreen(
         item { Spacer(modifier = Modifier.height(32.dp)) }
     }
 
+    // Trashed note in the editor: permanent delete uses the same
+    // confirmation pattern as the list's delete dialog.
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete permanently?") },
+            text = { Text("This note cannot be recovered.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deletePermanently(n)
+                    reminderScheduler.cancelAll(n.id)
+                    showDeleteConfirm = false
+                    onBack()
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Keep") } }
+        )
+    }
     if (showFolderDialog) {
         AlertDialog(
             onDismissRequest = { showFolderDialog = false },

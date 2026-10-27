@@ -103,6 +103,9 @@ class NotesViewModel(
     }
     private val todosCache = MutableStateFlow<Map<Long, List<TodoItem>>>(emptyMap())
 
+    /** Todos per note, exposed read-only so the list can show checklist progress. */
+    val todosByNote: StateFlow<Map<Long, List<TodoItem>>> = todosCache
+
     init {
         viewModelScope.launch {
             notes.collect { list ->

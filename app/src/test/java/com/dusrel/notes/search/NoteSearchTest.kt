@@ -40,4 +40,20 @@ class NoteSearchTest {
     @Test fun noMatchReturnsEmpty() {
         assertTrue(searchNotes(notes, todos, folders, "zzz-no-match").isEmpty())
     }
+
+    @Test fun lowercasingIsLocaleExplicitNotDefaultLocale() {
+        // Under the Turkish default locale "I" lowercases to "ı", which would
+        // break matching "ITEM" for query "item". Locale.ROOT keeps "I" -> "i".
+        val previous = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr"))
+            val found = searchNotes(
+                listOf(Note(id = 9, title = "ITEM", content = "")),
+                emptyMap(), emptyMap(), "item",
+            )
+            assertEquals(listOf(9L), found.map { it.id })
+        } finally {
+            java.util.Locale.setDefault(previous)
+        }
+    }
 }

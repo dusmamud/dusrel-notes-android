@@ -13,6 +13,7 @@ import com.dusrel.notes.data.local.NotesDatabase
 import com.dusrel.notes.domain.model.Note
 import com.dusrel.notes.domain.model.NoteType
 import com.dusrel.notes.domain.widget.WidgetNoteItem
+import com.dusrel.notes.domain.widget.widgetMetaLine
 import com.dusrel.notes.domain.widget.widgetNotes
 import kotlinx.coroutines.runBlocking
 
@@ -54,8 +55,14 @@ class NotesRemoteViewsFactory(private val context: Context) :
             NotesDatabase::class.java,
             "notes.db",
         ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { db = it }
+        // Date formatting lives here (not in a composable), so the device
+        // locale is fine; the pure widgetNotes() function stays locale-free.
+        val dateFormat = java.text.SimpleDateFormat(
+            "dd MMM yyyy", java.util.Locale.getDefault(),
+        )
         items = widgetNotes(
-            runBlocking { database.noteDao().getAll() }.map { it.toDomain() }
+            runBlocking { database.noteDao().getAll() }.map { it.toDomain() },
+            formatDate = { millis -> dateFormat.format(java.util.Date(millis)) },
         )
     }
 
@@ -72,6 +79,7 @@ class NotesRemoteViewsFactory(private val context: Context) :
         val item = items.getOrNull(position) ?: return views
         views.setTextViewText(R.id.widget_note_title, item.title)
         views.setTextViewText(R.id.widget_note_snippet, item.snippet)
+        views.setTextViewText(R.id.widget_note_meta, widgetMetaLine(item))
         // Fill-in intent: the provider's PendingIntent template supplies the
         // MainActivity target; this carries only the clicked note's id.
         // Coordinator note: MainActivity must also handle the "note_id" extra
