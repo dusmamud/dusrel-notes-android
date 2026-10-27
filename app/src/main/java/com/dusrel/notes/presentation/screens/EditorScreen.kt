@@ -46,6 +46,7 @@ import com.dusrel.notes.domain.model.NoteType
 import com.dusrel.notes.domain.model.RichDocument
 import com.dusrel.notes.domain.model.migrateMarkersToSpans
 import com.dusrel.notes.domain.model.richDocumentFromSpansJson
+import com.dusrel.notes.domain.model.toSpansJson
 import com.dusrel.notes.domain.model.TodoItem
 import com.dusrel.notes.domain.reminder.ReminderAlarmScheduler
 import com.dusrel.notes.domain.reminder.ReminderScheduler

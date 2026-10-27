@@ -113,21 +113,48 @@ class NotesViewModel(
         }
     }
 
-    /** Visible notes for the list screen: tab, folder, privacy, search, sort. */
+    /**
+     * Visible notes for the list screen: tab, folder, privacy, search, sort.
+     * NOTE: kotlinx-coroutines only provides typed combine() overloads for up
+     * to 5 flows; the previous 8-flow combine() silently fell back to the
+     * vararg Array<Any?> overload, which broke all type inference in the
+     * lambda (the CI compileDebugKotlin failure). So the 8 inputs are combined
+     * as two typed groups (5 + 3) and then combined again — same behaviour,
+     * fully typed.
+     */
+    private data class VisibleNotesBase(
+        val notesList: List<Note>,
+        val foldersList: List<Folder>,
+        val q: String,
+        val sort: SortOrder,
+        val folderId: Long?,
+    )
+
+    private data class VisibleNotesFilter(
+        val tab: ListTab,
+        val unlocked: Boolean,
+        val todos: Map<Long, List<TodoItem>>,
+    )
+
     val visibleNotes: StateFlow<List<Note>> = combine(
-        decryptedNotes, folders, query, sortOrder, folderFilterId, listTab, privateUnlocked, todosCache
-    ) { notesList, foldersList, q, sort, folderId, tab, unlocked, todos ->
-        val foldersById = foldersList.associateBy { it.id }
-        var filtered = notesList.filter { note ->
-            when (tab) {
+        combine(decryptedNotes, folders, query, sortOrder, folderFilterId) { notesList, foldersList, q, sort, folderId ->
+            VisibleNotesBase(notesList, foldersList, q, sort, folderId)
+        },
+        combine(listTab, privateUnlocked, todosCache) { tab, unlocked, todos ->
+            VisibleNotesFilter(tab, unlocked, todos)
+        },
+    ) { base, filter ->
+        val foldersById = base.foldersList.associateBy { it.id }
+        var filtered = base.notesList.filter { note ->
+            when (filter.tab) {
                 ListTab.ACTIVE -> !note.trashed && !note.archived
                 ListTab.ARCHIVED -> note.archived && !note.trashed
                 ListTab.TRASH -> note.trashed
-            } && (folderId == null || note.folderId == folderId)
-                && (!note.isPrivate || unlocked)
+            } && (base.folderId == null || note.folderId == base.folderId)
+                && (!note.isPrivate || filter.unlocked)
         }
-        if (q.isNotBlank()) filtered = searchNotes(filtered, todos, foldersById, q)
-        sortNotes(filtered, sort)
+        if (base.q.isNotBlank()) filtered = searchNotes(filtered, filter.todos, foldersById, base.q)
+        sortNotes(filtered, base.sort)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun todosFor(noteId: Long): StateFlow<List<TodoItem>> =
