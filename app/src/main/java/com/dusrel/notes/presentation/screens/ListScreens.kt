@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,11 +16,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -43,15 +49,20 @@ import androidx.compose.ui.unit.sp
 import com.dusrel.notes.data.work.ExactAlarmScheduler
 import com.dusrel.notes.data.work.cancelReminder
 import com.dusrel.notes.data.work.scheduleReminder
+import com.dusrel.notes.domain.list.TodoFilter
+import com.dusrel.notes.domain.list.filterTodosByCompletion
 import com.dusrel.notes.domain.list.listMetaLine
 import com.dusrel.notes.domain.list.listSnippet
+import com.dusrel.notes.domain.list.todoNotes
 import com.dusrel.notes.domain.list.todoProgressLabel
+import com.dusrel.notes.domain.search.searchNotes
 import com.dusrel.notes.domain.model.Note
 import com.dusrel.notes.domain.model.TodoItem
 import com.dusrel.notes.domain.reminder.ReminderAlarmScheduler
 import com.dusrel.notes.domain.reminder.ReminderScheduler
 import com.dusrel.notes.domain.model.NoteType
 import com.dusrel.notes.domain.model.SortOrder
+import com.dusrel.notes.domain.model.sortNotes
 import com.dusrel.notes.presentation.components.SymbolIcon
 import com.dusrel.notes.presentation.components.Symbols
 import com.dusrel.notes.presentation.viewmodel.ListTab
@@ -89,6 +100,9 @@ fun NotesListScreen(
     val locale = LocalConfiguration.current.locales[0]
     var showCreateDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
+    // Grid/list is a layout switch only, held in memory for this session.
+    // It is deliberately NOT persisted (no DataStore key added for it).
+    var isGrid by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<Note?>(null) }
     var longPressNote by remember { mutableStateOf<Note?>(null) }
     var moveFolderNote by remember { mutableStateOf<Note?>(null) }
@@ -136,6 +150,30 @@ fun NotesListScreen(
                 }
             }
         }
+        // Folder filter strip: reuses the existing ViewModel folderFilterId
+        // (same filter the Folders destination sets). "All" clears it; the
+        // Folders tab itself is unchanged and remains the management place.
+        if (folders.isNotEmpty()) {
+            Row(
+                modifier = Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val allSelected = folderFilter == null
+                if (allSelected) {
+                    Button(onClick = { viewModel.folderFilterId.value = null }, modifier = Modifier.padding(end = 8.dp)) { Text("All folders") }
+                } else {
+                    OutlinedButton(onClick = { viewModel.folderFilterId.value = null }, modifier = Modifier.padding(end = 8.dp)) { Text("All folders") }
+                }
+                folders.forEach { folder ->
+                    val selected = folderFilter == folder.id
+                    if (selected) {
+                        Button(onClick = { viewModel.folderFilterId.value = folder.id }, modifier = Modifier.padding(end = 8.dp)) { Text(folder.name) }
+                    } else {
+                        OutlinedButton(onClick = { viewModel.folderFilterId.value = folder.id }, modifier = Modifier.padding(end = 8.dp)) { Text(folder.name) }
+                    }
+                }
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
             OutlinedButton(onClick = { showSortDialog = true }) {
                 SymbolIcon(Symbols.SORT, size = 18.sp)
@@ -146,6 +184,10 @@ fun NotesListScreen(
                 })
             }
             Spacer(modifier = Modifier.width(8.dp))
+            // Layout switch only (list <-> grid); state is in-memory, see above.
+            IconButton(onClick = { isGrid = !isGrid }) {
+                SymbolIcon(if (isGrid) Symbols.VIEW_LIST else Symbols.GRID_VIEW, size = 20.sp)
+            }
             if (folderFilter != null) {
                 OutlinedButton(onClick = { viewModel.folderFilterId.value = null }) {
                     Text("Folder: " + (folders.firstOrNull { it.id == folderFilter }?.name ?: "") + " ✕")
@@ -188,6 +230,29 @@ fun NotesListScreen(
                     )
                 }
             }
+        } else if (isGrid) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.weight(1f).padding(top = 8.dp),
+            ) {
+                items(notes, key = { it.id }) { note ->
+                    NoteCard(
+                        note = note,
+                        tab = tab,
+                        todos = todosByNote[note.id].orEmpty(),
+                        folderName = folders.firstOrNull { it.id == note.folderId }?.name,
+                        locale = locale,
+                        onOpen = { onOpenNote(note.id) },
+                        onLongPress = { longPressNote = note },
+                        onPin = { viewModel.togglePin(note) },
+                        onArchive = { viewModel.setArchived(note, true) },
+                        onUnarchive = { viewModel.setArchived(note, false) },
+                        onTrash = { viewModel.moveToTrash(note); reminderScheduler.cancelAll(note.id) },
+                        onRestore = { viewModel.restoreFromTrash(note) },
+                        onDelete = { confirmDelete = note },
+                    )
+                }
+            }
         } else {
             LazyColumn(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
                 items(notes, key = { it.id }) { note ->
@@ -195,6 +260,7 @@ fun NotesListScreen(
                         note = note,
                         tab = tab,
                         todos = todosByNote[note.id].orEmpty(),
+                        folderName = folders.firstOrNull { it.id == note.folderId }?.name,
                         locale = locale,
                         onOpen = { onOpenNote(note.id) },
                         onLongPress = { longPressNote = note },
@@ -304,12 +370,190 @@ fun NotesListScreen(
     }
 }
 
+/**
+ * Dedicated Todo destination: a first-class page for checklist notes only.
+ * No new database or table — it reuses NoteType.TODO notes and the existing
+ * TodoItem rows. Listing, per-item done toggles, and inline add-item all use
+ * the existing ViewModel methods; "New checklist" reuses the existing
+ * create/checklist editor route via [onCreateChecklist]. Search here is
+ * scoped to checklists (the shared [searchNotes] logic, applied after the
+ * todo-only filter), so it is NOT the global notes search. Archived and
+ * trashed checklists are excluded here on purpose — they stay in the
+ * Archived / Trash tabs of the Notes list (see domain/list/TodoList.kt).
+ */
+@Composable
+fun TodoScreen(
+    viewModel: NotesViewModel,
+    onOpenNote: (Long) -> Unit,
+    onCreateChecklist: () -> Unit,
+) {
+    val notes by viewModel.decryptedNotes.collectAsState()
+    val unlocked by viewModel.privateUnlocked.collectAsState()
+    val folders by viewModel.folders.collectAsState()
+    val todosByNote by viewModel.todosByNote.collectAsState()
+    val sort by viewModel.sortOrder.collectAsState()
+    val locale = LocalConfiguration.current.locales[0]
+    val context = LocalContext.current
+    // Same rule as the notes list: trashing must cancel the note's alarm on
+    // both paths, or it would still fire for a trashed checklist.
+    val reminderScheduler = remember {
+        ReminderScheduler(
+            ExactAlarmScheduler(context),
+            object : ReminderAlarmScheduler {
+                override fun schedule(noteId: Long, title: String, atMillis: Long) =
+                    scheduleReminder(context, noteId, title, atMillis)
+                override fun cancel(noteId: Long) = cancelReminder(context, noteId)
+            },
+        )
+    }
+    var query by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf(TodoFilter.ALL) }
+    val foldersById = folders.associateBy { it.id }
+    val base = sortNotes(todoNotes(notes, unlocked), sort)
+    val filtered = filterTodosByCompletion(base, todosByNote, filter).let { list ->
+        if (query.isBlank()) list else searchNotes(list, todosByNote, foldersById, query)
+    }
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Todo", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+            Text("${base.size} lists", style = MaterialTheme.typography.bodyMedium)
+        }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("Search checklists…") },
+            leadingIcon = { SymbolIcon(Symbols.SEARCH, size = 20.sp) },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        )
+        Row(modifier = Modifier.padding(top = 8.dp)) {
+            listOf(TodoFilter.ALL to "All", TodoFilter.OPEN to "To do", TodoFilter.DONE to "Done").forEach { (f, label) ->
+                val selected = filter == f
+                if (selected) {
+                    Button(onClick = { filter = f }, modifier = Modifier.padding(end = 8.dp)) { Text(label) }
+                } else {
+                    OutlinedButton(onClick = { filter = f }, modifier = Modifier.padding(end = 8.dp)) { Text(label) }
+                }
+            }
+        }
+        if (base.isEmpty()) {
+            Column(modifier = Modifier.padding(top = 32.dp)) {
+                SymbolIcon(Symbols.CHECKLIST, size = 48.sp)
+                Text("No checklists yet", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
+                Text("Tap New checklist below to start one, or make a checklist from the Notes list.", style = MaterialTheme.typography.bodyMedium)
+            }
+        } else if (filtered.isEmpty()) {
+            Column(modifier = Modifier.padding(top = 32.dp)) {
+                SymbolIcon(Symbols.SEARCH, size = 48.sp)
+                Text(
+                    if (query.isNotBlank()) "No results for \"$query\"" else "No ${when (filter) { TodoFilter.DONE -> "done"; TodoFilter.OPEN -> "open"; TodoFilter.ALL -> "" }} checklists",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text("Try a different word or another filter.", style = MaterialTheme.typography.bodyMedium)
+                if (query.isNotBlank()) {
+                    Button(onClick = { query = "" }, modifier = Modifier.padding(top = 12.dp)) { Text("Clear search") }
+                }
+            }
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
+                items(filtered, key = { it.id }) { note ->
+                    TodoCard(
+                        note = note,
+                        folders = folders,
+                        locale = locale,
+                        viewModel = viewModel,
+                        reminderScheduler = reminderScheduler,
+                        onOpen = { onOpenNote(note.id) },
+                    )
+                }
+            }
+        }
+        Button(onClick = onCreateChecklist, modifier = Modifier.fillMaxWidth()) {
+            SymbolIcon(Symbols.ADD, size = 20.sp)
+            Text(" New checklist", modifier = Modifier.padding(start = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun TodoCard(
+    note: Note,
+    folders: List<com.dusrel.notes.domain.model.Folder>,
+    locale: java.util.Locale,
+    viewModel: NotesViewModel,
+    reminderScheduler: ReminderScheduler,
+    onOpen: () -> Unit,
+) {
+    // Live per-note items from the repository (not the list's todos cache,
+    // which only refreshes when the notes list itself changes).
+    val todos by viewModel.todosFor(note.id).collectAsState()
+    var newItemText by remember { mutableStateOf("") }
+    val folderName = folders.firstOrNull { it.id == note.folderId }?.name
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onOpen() },
+        colors = CardDefaults.cardColors(
+            containerColor = if (note.color != 0) Color(note.color) else MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SymbolIcon(Symbols.CHECKLIST, size = 20.sp)
+                Text(
+                    note.title.ifBlank { "(Untitled)" },
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f).padding(start = 8.dp)
+                )
+                if (note.pinned) SymbolIcon(Symbols.PUSH_PIN, size = 18.sp)
+                if (note.isPrivate) SymbolIcon(Symbols.LOCK, size = 18.sp)
+                IconButton(onClick = { viewModel.moveToTrash(note); reminderScheduler.cancelAll(note.id) }) { SymbolIcon(Symbols.DELETE, size = 20.sp) }
+            }
+            val dateText = java.text.SimpleDateFormat("dd MMM yyyy", locale)
+                .format(java.util.Date(note.updatedAt))
+            Text(
+                listMetaLine(dateText, todoProgressLabel(todos)),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (!folderName.isNullOrBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                    SymbolIcon(Symbols.FOLDER, size = 14.sp)
+                    Text(folderName, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+            todos.forEach { item ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Checkbox(checked = item.done, onCheckedChange = { viewModel.toggleTodo(item) })
+                    Text(item.text, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { viewModel.deleteTodo(item) }) { SymbolIcon(Symbols.DELETE, size = 18.sp) }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                OutlinedTextField(
+                    value = newItemText,
+                    onValueChange = { newItemText = it },
+                    label = { Text("New item") },
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = {
+                    if (newItemText.isNotBlank()) {
+                        viewModel.addTodo(note.id, newItemText.trim())
+                        newItemText = ""
+                    }
+                }) { Text("Add") }
+            }
+            TextButton(onClick = onOpen) { Text("Open in editor") }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NoteCard(
     note: Note,
     tab: ListTab,
     todos: List<TodoItem>,
+    folderName: String? = null,
     locale: java.util.Locale,
     onOpen: () -> Unit,
     onLongPress: () -> Unit,
@@ -356,6 +600,14 @@ private fun NoteCard(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
             )
+            // Folder label, only when the note is in a folder (already in
+            // the list ViewModel state via folders; no new data model).
+            if (!folderName.isNullOrBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                    SymbolIcon(Symbols.FOLDER, size = 14.sp)
+                    Text(folderName, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
+                }
+            }
             Row {
                 when (tab) {
                     ListTab.ACTIVE -> {

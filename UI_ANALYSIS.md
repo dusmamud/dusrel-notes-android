@@ -194,3 +194,193 @@ stroke-splitting with its own round-trip tests, not as a quick overlay.
 - Not verified here: Compose compilation, Gradle/CI build, APK, and
   on-device behaviour (long-press gesture, widget empty view, doodle
   undo/widths, theme canvas). Those need the CI run + device check.
+
+## 7. Main-screen + bottom-navigation redesign (this change)
+
+Functional summary only: no reference-app strings, layouts, colours,
+measurements, or code are reproduced here. The analysis below is the
+functional behaviour supplied for this pass (launcher hosts a notes list
+page and a todo page; folders are a filter inside the notes page plus
+management dialogs; trash is a view/dialog, not a tab; archive has no
+class-name evidence in the reference) restated in this app's own terms.
+Anything static analysis could NOT prove (bottom-menu item count,
+labels, order, any centre create tab, the exact default destination,
+whether tabs and pager are one control or two linked controls, any
+notes-page sort control) is treated as unknown and is NOT asserted here.
+
+### 7.1 Main-screen functional analysis used
+
+- **Destinations.** Two first-class pages in the launcher shell: a notes
+  list page and a todo page. Bottom destinations functionally = Notes +
+  Todo. Folders are a filter strip inside the notes page plus management
+  dialogs, not a tab in the reference. Trash is a dialog/view, not a tab.
+  Archive has zero class-name evidence in the reference, so it is kept
+  here as an original feature of this app, not as a parity item.
+- **Todo page (reference, functional).** A full first-class page:
+  categories, inline create, its own search, done/not-done handling,
+  drag ordering. Drag ordering is NOT implemented here (see §7.4).
+- **Notes page (reference, functional).** Folder strip/filter, per-page
+  search (notes + folders scope), empty states, grid/list view toggle,
+  multi-select action mode, row indicators (pin, colour, reminder,
+  private, folder label, thumbnail/handwriting/voice). Multi-select is
+  NOT implemented here (see §7.4); thumbnail/handwriting/voice rows are
+  out of scope (audio/handwriting activities excluded).
+- **Header / top bar (reference, functional).** Options menu + settings
+  entry + private entry + search entry; create affordances live on the
+  pages. Create flow in the reference is separated: text -> editor,
+  todo -> todo page, doodle -> its own activity. This app keeps its
+  single create dialog -> single editor as a simplification, but a
+  direct doodle path remains (the dialog's Doodle entry, and the Todo
+  destination's New checklist entry).
+- **Navigation (reference, functional).** Editor/doodle return by
+  finish/popBackStack; tab switches swap pages without a back-stack
+  push. This app implements exactly that: switching tabs does not add
+  to the back stack, and back from a tab exits (or returns to the start
+  destination), never walks through tab history.
+- **Excluded items.** Account, cloud sync, AI, audio/voice notes, mind
+  notes, handwriting activities: none added, none imitated. The backend
+  seam stays local-only (no-op sync provider) and the manifest
+  permissions are unchanged.
+
+### 7.2 Gap table — main screen before this change
+
+| Area | Status | File evidence |
+|---|---|---|
+| Todo as a first-class destination | MISSING | `MainActivity.kt` (before: tabs Notes/Folders/Reminders/Settings, no todo route) — todo existed only as `NoteType.TODO` inside the notes list (`presentation/screens/ListScreens.kt` `NotesListScreen`). |
+| Todo destination: own search | MISSING | No todo route existed, so no todo-scoped search existed; the only search was the notes list's global `query` (`presentation/viewmodel/NotesViewModel.kt`). |
+| Todo destination: inline item done-toggle / add-item | MISSING | Done toggles and add-item existed only inside the checklist editor (`presentation/screens/EditorScreen.kt`), not on any list page. |
+| Bottom navigation: Todo tab | MISSING | `MainActivity.kt` `mainTabs` had 4 entries, none for todo. |
+| Bottom navigation: state preservation on tab switch | PARTIAL | `MainActivity.kt` already used `popUpTo(LIST)` + `launchSingleTop` (no stack growth), but without `saveState`/`restoreState`, so a tab's scroll/filter state was not restored on return. |
+| Notes page: folder filter strip | MISSING | `ListScreens.kt` had only a single "Folder: X ✕" clear button when a filter was active; no strip listing all folders. Folder management itself was PRESENT on the Folders tab. |
+| Notes page: grid/list view toggle | MISSING | `ListScreens.kt` rendered a `LazyColumn` only; no layout switch existed. |
+| Note row: folder name label | MISSING | `ListScreens.kt` `NoteCard` rendered date + progress only; the folder name was in ViewModel state (`folders`) but never shown on a row. |
+| Notes page: Archived filter | PRESENT (kept) | `ListScreens.kt` All/Pinned/Archived/Trash tabs — Archived is retained unchanged; it is an original feature, not a parity item. |
+| Notes page: sort dialog | PRESENT (kept) | `ListScreens.kt` sort dialog (Recent / Title / Pinned first) — retained; sort is shared with the Todo destination. |
+| Create: text / checklist / doodle from one entry | PRESENT (kept, simplified) | `ListScreens.kt` create dialog offers all three types; the Todo destination adds a direct "New checklist" entry reusing the same editor route. |
+| Multi-select action mode on the notes page | MISSING (deliberately not added) | See §7.4. |
+| Todo page: drag ordering | MISSING (deliberately not added) | See §7.4. |
+
+### 7.3 What this change redesigns (before / after, in words)
+
+- **Bottom navigation — before:** 4 tabs: Notes, Folders, Reminders,
+  Settings. **After:** 5 tabs: Notes, Todo, Folders, Reminders,
+  Settings (decision: keep-all, option (a)). Justification: a 5-item
+  Material 3 `NavigationBar` is the standard layout and nothing in the
+  existing code breaks at 5 items, so folding Folders away would have
+  deleted a working management destination for no proven benefit.
+  Folders stays the management destination AND the notes page gains a
+  folder filter strip (below), which matches the reference's
+  filter-inside-notes-page function without deleting anything. The Todo
+  tab uses the existing `CHECKLIST` symbol, filled when selected, per
+  the app's icon rule. Notes remains the start destination; the default
+  destination is not asserted beyond that (the reference default was
+  not proven).
+- **Todo destination — before:** none; checklists were rows in the
+  notes list. **After:** new route `todo` (`MainActivity.kt`
+  `Routes.TODO`) rendering `TodoScreen` (`ListScreens.kt`). It lists
+  only checklist notes (new pure filter `domain/list/TodoList.kt`
+  `todoNotes()` / `filterTodosByCompletion()` — no new database, no new
+  table, same `NoteType.TODO` + `TodoItem` model). It supports: opening
+  a checklist in the existing editor (row tap / "Open in editor"),
+  creating a new checklist from within the destination ("New
+  checklist" -> existing create/checklist editor route), marking items
+  done/undone inline (checkbox per item, existing `toggleTodo`), adding
+  items inline (per-card "New item" + Add, existing `addTodo`),
+  deleting items inline (existing `deleteTodo`), moving a checklist to
+  trash from its card, its own search (checklist-scoped, reusing the
+  existing `searchNotes` logic after the todo-only filter), and
+  All / To do / Done completion filters. Archived and trashed
+  checklists are deliberately excluded here — they stay visible in the
+  Archived / Trash tabs of the Notes list, so no checklist's lifecycle
+  state is hidden by the new destination. Locked private checklists are
+  hidden until unlocked, same as the notes list.
+- **Tab-switch state preservation — before:** `popUpTo(LIST)` +
+  `launchSingleTop` only. **After:** `popUpTo(Routes.LIST) {
+  saveState = true }` + `launchSingleTop = true` + `restoreState =
+  true` on every bottom-tab tap. `Routes.LIST` (not the graph's start
+  destination, which is the Guide on first run before it is popped) is
+  used as the anchor because LIST is always in the stack whenever the
+  bottom bar is shown. Editor back behaviour is unchanged
+  (`popBackStack`): editor opened from Todo returns to Todo, editor
+  opened from Notes returns to Notes. The Folders -> Notes jump now
+  also restores Notes state (`restoreState = true`).
+- **Notes list header + filters — before:** title row (Notes +
+  private + settings icons), search field, Notes/Archived/Trash tab
+  buttons, sort button, single "Folder: X ✕" clear button, bottom "New
+  note" button. **After:** the same structure, made clearer in the
+  app's own style — title row unchanged; search entry unchanged;
+  Notes/Archived/Trash tabs unchanged (Archived NOT removed); a
+  horizontally scrollable folder filter strip is added above the sort
+  row (All folders + one chip per folder, reusing the existing
+  `folderFilterId` ViewModel state — no new data model, and the
+  Folders tab remains the place to create/delete folders); the sort row
+  gains a grid/list toggle icon beside the sort button; the "Folder:
+  X ✕" clear button is kept. The primary create entry stays the single
+  bottom "New note" button offering Text note / Checklist / Doodle
+  through the existing create dialog and routes — one clear entry, not
+  a FAB plus a header action plus a button.
+- **Small polish — before:** list/grid was list-only; rows showed date
+  + progress only. **After:** a grid/list layout switch on the notes
+  page (`LazyVerticalGrid`, 2 columns, same `NoteCard` in both layouts)
+  held in in-memory `remember` state only — deliberately NOT persisted
+  (no DataStore key added; it resets on process death, stated here so
+  it is not mistaken for a persisted setting). Note rows now show the
+  folder name label (with folder icon) when the note is in a folder,
+  in both the notes list and the Todo cards, using the folder name
+  already available in ViewModel state.
+- **Theme / icons / package / name:** unchanged. Light/Dark/System
+  theme, Poppins, Material Symbols Rounded filled-when-selected, package
+  `com.dusrel.notes`, app name Notes — all untouched.
+
+### 7.4 Deliberately NOT changed / NOT implemented
+
+- **Multi-select action mode:** skipped in this pass (large change:
+  selection state, action-mode bar, batch actions across tabs). Listed
+  here, not silently dropped. Long-press actions dialog from §3 remains
+  the per-note action path.
+- **Todo drag ordering:** not implemented. Checklists keep their
+  existing item order (insertion position); no reorder UI or model
+  change was added.
+- **Folders destination:** not deleted, not folded into a tab-less
+  strip-only design. The strip is additive; management stays on the
+  Folders tab.
+- **Reminders, Archived, private notes, widgets:** untouched except
+  that the Todo destination reuses the existing private-lock hiding
+  rule. No new permission, no account, no sync, no AI, no audio.
+- **Create flow:** not split into separate activities. The single
+  create dialog -> single editor simplification is kept, with the Todo
+  destination's direct checklist entry as the only new create path.
+- **Grid/list persistence:** not persisted (see §7.3). A DataStore key
+  for it would be trivial to add later if wanted.
+
+### 7.5 Verification scope for this change (honest limits)
+
+- Static: route `todo` exists in `MainActivity.kt` and every bottom
+  destination (Notes, Todo, Folders, Reminders, Settings) has a
+  composable — no dead ends; tab taps use
+  `popUpTo(LIST){saveState}` + `launchSingleTop` + `restoreState`,
+  editor back uses `popBackStack`; no `Locale.getDefault()` inside any
+  composable (the one pre-existing `Locale.getDefault()` use is in
+  `NotesWidgetService.kt`, which is not a composable, and is untouched
+  here); a case-insensitive search for the reference vendor's name
+  over `app/src/main` returns 0 matches; manifest permissions unchanged
+  (POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM, RECEIVE_BOOT_COMPLETED
+  only); package `com.dusrel.notes` and app name Notes unchanged; new
+  screen labels are hardcoded literals, following the existing screens'
+  pattern (existing screens do not use `strings.xml` for labels;
+  `strings.xml` itself is untouched).
+- Pure-JVM tests: new `TodoListTest` (3 tests: todo-only/active/
+  private-lock filtering, completion filter incl. empty-checklist-is-
+  OPEN rule) covers the new `domain/list/TodoList.kt` logic. Run under
+  a real JUnit 4.13.2 runner (jar from the local Gradle distribution,
+  plus hamcrest-core 1.3): **OK (3 tests)**. Gradle itself cannot run
+  in this sandbox per the pinned limitation, and the system `kotlinc`
+  is 1.3-era and cannot parse trailing commas that the untouched
+  existing `Models.kt` also uses, so `/tmp` copies with only trailing
+  commas stripped were compiled for the run. The repo files themselves
+  were not modified for the harness.
+- Not verified here: Compose compilation, Gradle/CI build, APK, and
+  on-device behaviour (5-tab bar layout at small widths, tab-state
+  restoration, Todo inline toggles, grid layout, folder strip scroll).
+  Those need the CI run (separate push approval) plus on-device
+  checking. Nothing was committed or pushed in this pass.

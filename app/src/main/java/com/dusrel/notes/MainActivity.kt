@@ -47,11 +47,13 @@ import com.dusrel.notes.presentation.screens.NotesListScreen
 import com.dusrel.notes.presentation.screens.PrivateScreen
 import com.dusrel.notes.presentation.screens.RemindersScreen
 import com.dusrel.notes.presentation.screens.SettingsScreen
+import com.dusrel.notes.presentation.screens.TodoScreen
 import com.dusrel.notes.presentation.theme.NotesTheme
 import com.dusrel.notes.presentation.viewmodel.NotesViewModel
 
 object Routes {
     const val LIST = "list"
+    const val TODO = "todo"
     const val EDITOR = "editor"
     const val FOLDERS = "folders"
     const val PRIVATE = "private"
@@ -97,8 +99,15 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val backStack by navController.currentBackStackEntryAsState()
                 val currentRoute = backStack?.destination?.route
+                // 5 tabs (decision: keep-all, option (a) in the task).
+                // A 5-item Material 3 NavigationBar is the standard layout
+                // and nothing in the existing code breaks at 5 items, so
+                // Folders is NOT folded away: it stays the folder-management
+                // destination, and the notes page additionally gets a folder
+                // filter strip. Notes stays the start destination.
                 val mainTabs = listOf(
                     Triple(Routes.LIST, "Notes", Symbols.HOME),
+                    Triple(Routes.TODO, "Todo", Symbols.CHECKLIST),
                     Triple(Routes.FOLDERS, "Folders", Symbols.FOLDER),
                     Triple(Routes.REMINDERS, "Reminders", Symbols.ALARM),
                     Triple(Routes.SETTINGS, "Settings", Symbols.SETTINGS),
@@ -142,9 +151,20 @@ class MainActivity : ComponentActivity() {
                                     NavigationBarItem(
                                         selected = selected,
                                         onClick = {
+                                            // Tab switches must NOT grow the back stack and must
+                                            // preserve each tab's state: save the tab being left,
+                                            // restore the tab being entered, single-top. Back
+                                            // from a tab therefore exits (or returns to the
+                                            // start destination), never walks tab history.
                                             navController.navigate(route) {
-                                                popUpTo(Routes.LIST) { inclusive = false }
+                                                // LIST (not the graph's start, which is GUIDE on
+                                                // first run before it is popped): LIST is always
+                                                // in the stack whenever the bottom bar is shown.
+                                                popUpTo(Routes.LIST) {
+                                                    saveState = true
+                                                }
                                                 launchSingleTop = true
+                                                restoreState = true
                                             }
                                         },
                                         icon = { SymbolIcon(icon, filled = selected) },
@@ -184,6 +204,17 @@ class MainActivity : ComponentActivity() {
                                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                             )
                         }
+                        composable(Routes.TODO) {
+                            TodoScreen(
+                                viewModel = viewModel,
+                                onOpenNote = { navController.navigate(Routes.editor(it)) },
+                                onCreateChecklist = {
+                                    viewModel.createNote(NoteType.TODO) { id ->
+                                        navController.navigate(Routes.editor(id))
+                                    }
+                                },
+                            )
+                        }
                         composable(
                             route = "editor/{noteId}",
                             arguments = listOf(navArgument("noteId") { type = NavType.LongType })
@@ -198,7 +229,10 @@ class MainActivity : ComponentActivity() {
                             FoldersScreen(viewModel = viewModel, onOpenFolder = { folderId ->
                                 viewModel.folderFilterId.value = folderId
                                 viewModel.listTab.value = com.dusrel.notes.presentation.viewmodel.ListTab.ACTIVE
-                                navController.navigate(Routes.LIST) { launchSingleTop = true }
+                                navController.navigate(Routes.LIST) {
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             })
                         }
                         composable(Routes.PRIVATE) {
