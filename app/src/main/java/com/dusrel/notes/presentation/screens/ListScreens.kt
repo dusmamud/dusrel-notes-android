@@ -368,7 +368,7 @@ fun NotesListScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 SymbolIcon(Symbols.DESCRIPTION, size = 52.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                                 Text(
-                                    if (query.isNotBlank()) "No notes matching "$query""
+                                    if (query.isNotBlank()) "No notes matching \"$query\""
                                     else if (tab == ListTab.TRASH) "Trash is empty"
                                     else "No notes here yet",
                                     style = MaterialTheme.typography.titleMedium,
