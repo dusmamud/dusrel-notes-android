@@ -48,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -136,6 +138,32 @@ fun EditorScreen(
         }
         doodleData = loaded?.doodleData ?: ""
         todos = viewModel.getTodos(noteId)
+    }
+
+    
+    val undoStack = remember { mutableStateListOf<RichDocument>() }
+    val redoStack = remember { mutableStateListOf<RichDocument>() }
+
+    fun performUndo() {
+        if (undoStack.isNotEmpty()) {
+            val prev = undoStack.removeAt(undoStack.lastIndex)
+            doc?.let { redoStack.add(it) }
+            doc = prev
+            current?.let {
+                viewModel.saveNoteDebounced(it.copy(title = title, content = prev.text, richTextSpans = prev.toSpansJson(), doodleData = doodleData))
+            }
+        }
+    }
+
+    fun performRedo() {
+        if (redoStack.isNotEmpty()) {
+            val next = redoStack.removeAt(redoStack.lastIndex)
+            doc?.let { undoStack.add(it) }
+            doc = next
+            current?.let {
+                viewModel.saveNoteDebounced(it.copy(title = title, content = next.text, richTextSpans = next.toSpansJson(), doodleData = doodleData))
+            }
+        }
     }
 
     val current = note
@@ -233,6 +261,30 @@ fun EditorScreen(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Live Undo Button
+                        IconButton(
+                            onClick = { performUndo() },
+                            enabled = undoStack.isNotEmpty()
+                        ) {
+                            SymbolIcon(
+                                Symbols.UNDO,
+                                size = 20.sp,
+                                color = if (undoStack.isNotEmpty()) cardTheme.onContainerColor else cardTheme.secondaryTextColor.copy(alpha = 0.3f)
+                            )
+                        }
+                        // Live Redo Button (Horizontally mirrored)
+                        IconButton(
+                            onClick = { performRedo() },
+                            enabled = redoStack.isNotEmpty()
+                        ) {
+                            SymbolIcon(
+                                Symbols.UNDO,
+                                size = 20.sp,
+                                modifier = Modifier.graphicsLayer(scaleX = -1f),
+                                color = if (redoStack.isNotEmpty()) cardTheme.onContainerColor else cardTheme.secondaryTextColor.copy(alpha = 0.3f)
+                            )
+                        }
+
                         // Pin Toggle Icon
                         IconButton(onClick = {
                             val newPinned = !n.pinned
@@ -445,7 +497,17 @@ fun EditorScreen(
                         item {
                             RichTextEditor(
                                 document = doc ?: RichDocument(""),
-                                onChange = { newDoc -> doc = newDoc; persist() },
+                                onChange = { newDoc ->
+                                    doc?.let { prevDoc ->
+                                        if (prevDoc.text != newDoc.text || prevDoc.paragraphs != newDoc.paragraphs || prevDoc.spans != newDoc.spans) {
+                                            if (undoStack.size > 50) undoStack.removeAt(0)
+                                            undoStack.add(prevDoc)
+                                            redoStack.clear()
+                                        }
+                                    }
+                                    doc = newDoc
+                                    persist()
+                                },
                                 showToolbar = showFormatToolbar,
                                 modifier = Modifier.fillMaxWidth()
                             )
