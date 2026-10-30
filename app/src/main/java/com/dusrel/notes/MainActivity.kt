@@ -194,10 +194,10 @@ class MainActivity : ComponentActivity() {
                                 })
                             }
                             composable(Routes.PRIVATE) {
-                                PrivateScreen(viewModel = viewModel, onOpenNote = { navController.navigate(Routes.editor(it)) })
+                                PrivateScreen(viewModel = viewModel, onOpenNote = { noteId -> navController.navigate(Routes.editor(noteId)) })
                             }
                             composable(Routes.REMINDERS) {
-                                RemindersScreen(viewModel = viewModel, onOpenNote = { navController.navigate(Routes.editor(it)) })
+                                RemindersScreen(viewModel = viewModel, onOpenNote = { noteId -> navController.navigate(Routes.editor(noteId)) })
                             }
                             composable(Routes.SETTINGS) {
                                 SettingsScreen(

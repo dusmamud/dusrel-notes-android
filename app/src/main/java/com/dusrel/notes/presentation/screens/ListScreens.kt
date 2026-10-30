@@ -187,7 +187,7 @@ fun NotesListScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable { selectedTopTab = HomeTopTab.TASKS }
-                                .padding(horizontal = 4.dp, top = 4.dp, bottom = 4.dp)
+                                .padding(horizontal = 4.dp, vertical = 4.dp)
                         )
                     }
 
@@ -974,5 +974,143 @@ fun FoldersScreen(viewModel: NotesViewModel, onOpenFolder: (Long) -> Unit) {
             },
             dismissButton = { TextButton(onClick = { showCreate = false }) { Text("Cancel") } }
         )
+    }
+}
+
+@Composable
+fun PrivateScreen(viewModel: NotesViewModel, onOpenNote: (Long) -> Unit) {
+    // Decrypted notes: raw notes store "" titles for encrypted private notes.
+    val notes by viewModel.decryptedNotes.collectAsState()
+    val unlocked by viewModel.privateUnlocked.collectAsState()
+    var pinState by remember { mutableStateOf<String?>(null) } // null = unknown yet
+    var pin by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { pinState = if (viewModel.hasPin()) "enter" else "set" }
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Private notes", style = MaterialTheme.typography.headlineMedium)
+        when {
+            unlocked -> {
+                val privateNotes = notes.filter { it.isPrivate && !it.trashed }
+                if (privateNotes.isEmpty()) {
+                    Column(modifier = Modifier.padding(top = 32.dp)) {
+                        SymbolIcon(Symbols.LOCK, size = 48.sp)
+                        Text("No private notes yet", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
+                        Text("Mark a note Private in its editor.", style = MaterialTheme.typography.bodyMedium)
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
+                        items(privateNotes, key = { it.id }) { note ->
+                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onOpenNote(note.id) }) {
+                                Text(note.title.ifBlank { "(Untitled)" }, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                    }
+                }
+                Button(onClick = { viewModel.lockPrivate() }, modifier = Modifier.padding(top = 16.dp)) { Text("Lock private notes") }
+            }
+            pinState == "set" -> {
+                Text("Set a PIN to protect private notes. The PIN itself is never stored — it derives an encryption key (AES-GCM, PBKDF2) that encrypts private notes on this device. If you forget the PIN, private notes cannot be recovered.", modifier = Modifier.padding(top = 16.dp))
+                OutlinedTextField(value = pin, onValueChange = { pin = it }, label = { Text("New PIN") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                OutlinedTextField(value = confirm, onValueChange = { confirm = it }, label = { Text("Confirm PIN") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+                Button(onClick = {
+                    if (pin.length < 4) error = "PIN must be at least 4 characters."
+                    else if (pin != confirm) error = "PINs do not match."
+                    else {
+                        error = ""
+                        pinState = "saving:$pin"
+                    }
+                }, modifier = Modifier.padding(top = 8.dp)) { Text("Set PIN") }
+            }
+            pinState != null && pinState!!.startsWith("saving:") -> {
+                val toSave = pinState!!.removePrefix("saving:")
+                LaunchedEffect(toSave) {
+                    viewModel.setPin(toSave)
+                    viewModel.unlockWithPin(toSave)
+                }
+                Text("Saving PIN…", modifier = Modifier.padding(top = 16.dp))
+            }
+            else -> {
+                Text("Enter your PIN to view private notes.", modifier = Modifier.padding(top = 16.dp))
+                OutlinedTextField(value = pin, onValueChange = { pin = it }, label = { Text("PIN") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+                Button(onClick = {
+                    pinState = "checking:$pin"
+                }, modifier = Modifier.padding(top = 8.dp)) { Text("Unlock") }
+                if (pinState != null && pinState!!.startsWith("checking:")) {
+                    val toCheck = pinState!!.removePrefix("checking:")
+                    LaunchedEffect(toCheck) {
+                        if (viewModel.unlockWithPin(toCheck)) {
+                            pinState = "enter"
+                        } else {
+                            val remaining = viewModel.lockoutRemainingSeconds()
+                            error = if (remaining > 0) {
+                                "Too many wrong attempts. Try again in $remaining seconds."
+                            } else {
+                                "Wrong PIN."
+                            }
+                            pinState = "enter"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RemindersScreen(viewModel: NotesViewModel, onOpenNote: (Long) -> Unit) {
+    val notes by viewModel.notes.collectAsState()
+    val unlocked by viewModel.privateUnlocked.collectAsState()
+    val context = LocalContext.current
+    val locale = LocalConfiguration.current.locales[0]
+    val reminderScheduler = remember {
+        ReminderScheduler(
+            ExactAlarmScheduler(context),
+            object : ReminderAlarmScheduler {
+                override fun schedule(noteId: Long, title: String, atMillis: Long) =
+                    scheduleReminder(context, noteId, title, atMillis)
+                override fun cancel(noteId: Long) = cancelReminder(context, noteId)
+            },
+        )
+    }
+    val reminders = notes.filter {
+        it.reminderTime != null && !it.trashed && (!it.isPrivate || unlocked)
+    }.sortedBy { it.reminderTime }
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Reminders", style = MaterialTheme.typography.headlineMedium)
+        if (reminders.isEmpty()) {
+            Column(modifier = Modifier.padding(top = 32.dp)) {
+                SymbolIcon(Symbols.ALARM, size = 48.sp)
+                Text("No reminders", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
+                Text("Set a reminder on any note from its editor.", style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            LazyColumn(modifier = Modifier.padding(top = 8.dp)) {
+                items(reminders, key = { it.id }) { note ->
+                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onOpenNote(note.id) }) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(note.title.ifBlank { "(Untitled)" }, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", locale)
+                                        .format(java.util.Date(note.reminderTime!!)),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    if (note.reminderExact) "exact" else "best-effort",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            IconButton(onClick = {
+                                viewModel.updateNote(note.copy(reminderTime = null))
+                                reminderScheduler.cancelAll(note.id)
+                            }) { SymbolIcon(Symbols.DELETE, size = 20.sp) }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
