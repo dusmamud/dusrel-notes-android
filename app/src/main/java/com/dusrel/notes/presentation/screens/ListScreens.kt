@@ -3,10 +3,13 @@ package com.dusrel.notes.presentation.screens
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,11 +19,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -44,8 +48,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dusrel.notes.presentation.theme.getNoteCardTheme
 import com.dusrel.notes.data.work.ExactAlarmScheduler
 import com.dusrel.notes.data.work.cancelReminder
 import com.dusrel.notes.data.work.scheduleReminder
@@ -100,9 +107,7 @@ fun NotesListScreen(
     val locale = LocalConfiguration.current.locales[0]
     var showCreateDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
-    // Grid/list is a layout switch only, held in memory for this session.
-    // It is deliberately NOT persisted (no DataStore key added for it).
-    var isGrid by remember { mutableStateOf(false) }
+    val isGrid by viewModel.isGridView.collectAsState()
     var confirmDelete by remember { mutableStateOf<Note?>(null) }
     var longPressNote by remember { mutableStateOf<Note?>(null) }
     var moveFolderNote by remember { mutableStateOf<Note?>(null) }
@@ -184,8 +189,7 @@ fun NotesListScreen(
                 })
             }
             Spacer(modifier = Modifier.width(8.dp))
-            // Layout switch only (list <-> grid); state is in-memory, see above.
-            IconButton(onClick = { isGrid = !isGrid }) {
+            IconButton(onClick = { viewModel.toggleGridView() }) {
                 SymbolIcon(if (isGrid) Symbols.VIEW_LIST else Symbols.GRID_VIEW, size = 20.sp)
             }
             if (folderFilter != null) {
@@ -231,14 +235,17 @@ fun NotesListScreen(
                 }
             }
         } else if (isGrid) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+            LazyVerticalStaggeredGrid(
+                columns = StaggeredGridCells.Adaptive(minSize = 160.dp),
+                verticalItemSpacing = 10.dp,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.weight(1f).padding(top = 8.dp),
             ) {
                 items(notes, key = { it.id }) { note ->
                     NoteCard(
                         note = note,
                         tab = tab,
+                        isGrid = true,
                         todos = todosByNote[note.id].orEmpty(),
                         folderName = folders.firstOrNull { it.id == note.folderId }?.name,
                         locale = locale,
@@ -254,11 +261,15 @@ fun NotesListScreen(
                 }
             }
         } else {
-            LazyColumn(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f).padding(top = 8.dp),
+            ) {
                 items(notes, key = { it.id }) { note ->
                     NoteCard(
                         note = note,
                         tab = tab,
+                        isGrid = false,
                         todos = todosByNote[note.id].orEmpty(),
                         folderName = folders.firstOrNull { it.id == note.folderId }?.name,
                         locale = locale,
@@ -489,10 +500,15 @@ private fun TodoCard(
     val todos by viewModel.todosFor(note.id).collectAsState()
     var newItemText by remember { mutableStateOf("") }
     val folderName = folders.firstOrNull { it.id == note.folderId }?.name
+    val isDark = isSystemInDarkTheme()
+    val cardTheme = getNoteCardTheme(note.color, isDark)
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onOpen() },
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, cardTheme.borderColor),
         colors = CardDefaults.cardColors(
-            containerColor = if (note.color != 0) Color(note.color) else MaterialTheme.colorScheme.surface
+            containerColor = cardTheme.containerColor,
+            contentColor = cardTheme.onContainerColor
         )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -552,6 +568,7 @@ private fun TodoCard(
 private fun NoteCard(
     note: Note,
     tab: ListTab,
+    isGrid: Boolean = false,
     todos: List<TodoItem>,
     folderName: String? = null,
     locale: java.util.Locale,
@@ -564,64 +581,159 @@ private fun NoteCard(
     onRestore: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val isDark = isSystemInDarkTheme()
+    val cardTheme = getNoteCardTheme(note.color, isDark)
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
             .combinedClickable(onClick = { onOpen() }, onLongClick = { onLongPress() }),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, cardTheme.borderColor),
         colors = CardDefaults.cardColors(
-            containerColor = if (note.color != 0) Color(note.color) else MaterialTheme.colorScheme.surface
+            containerColor = cardTheme.containerColor,
+            contentColor = cardTheme.onContainerColor
         )
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SymbolIcon(
                     when (note.type) {
                         NoteType.TODO -> Symbols.CHECKLIST
                         NoteType.DOODLE -> Symbols.DRAW
                         else -> Symbols.DESCRIPTION
-                    }, size = 20.sp
+                    },
+                    size = 18.sp,
+                    color = cardTheme.secondaryTextColor
                 )
                 Text(
                     note.title.ifBlank { "(Untitled)" },
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f).padding(start = 8.dp)
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = cardTheme.onContainerColor,
+                    maxLines = if (isGrid) 2 else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(start = 6.dp)
                 )
-                if (note.pinned) SymbolIcon(Symbols.PUSH_PIN, size = 18.sp)
-                if (note.isPrivate) SymbolIcon(Symbols.LOCK, size = 18.sp)
-                if (note.reminderTime != null) SymbolIcon(Symbols.ALARM, size = 18.sp)
+                if (note.pinned) {
+                    SymbolIcon(
+                        Symbols.PUSH_PIN,
+                        size = 16.sp,
+                        color = Color(0xFFE5A93C),
+                        filled = true
+                    )
+                }
+                if (note.isPrivate) {
+                    SymbolIcon(
+                        Symbols.LOCK,
+                        size = 16.sp,
+                        color = cardTheme.secondaryTextColor
+                    )
+                }
+                if (note.reminderTime != null) {
+                    SymbolIcon(
+                        Symbols.ALARM,
+                        size = 16.sp,
+                        color = cardTheme.secondaryTextColor
+                    )
+                }
             }
             val preview = listSnippet(note)
-            if (preview.isNotBlank()) Text(preview, style = MaterialTheme.typography.bodyMedium)
-            // Updated date, plus checklist progress for TODO notes.
+            if (preview.isNotBlank()) {
+                Text(
+                    preview,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cardTheme.secondaryTextColor,
+                    maxLines = if (isGrid) 6 else 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            if (note.type == NoteType.TODO && todos.isNotEmpty()) {
+                Column(modifier = Modifier.padding(top = 4.dp)) {
+                    todos.take(if (isGrid) 3 else 4).forEach { item ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 1.dp)
+                        ) {
+                            SymbolIcon(
+                                if (item.done) Symbols.CHECK_CIRCLE else Symbols.CHECK,
+                                size = 13.sp,
+                                color = if (item.done) cardTheme.secondaryTextColor.copy(alpha = 0.5f) else cardTheme.secondaryTextColor,
+                                filled = item.done
+                            )
+                            Text(
+                                item.text,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (item.done) cardTheme.secondaryTextColor.copy(alpha = 0.5f) else cardTheme.onContainerColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
+                    if (todos.size > (if (isGrid) 3 else 4)) {
+                        Text(
+                            "+${todos.size - (if (isGrid) 3 else 4)} more",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cardTheme.secondaryTextColor.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+            }
             val dateText = java.text.SimpleDateFormat("dd MMM yyyy", locale)
                 .format(java.util.Date(note.updatedAt))
             val progress = if (note.type == NoteType.TODO) todoProgressLabel(todos) else null
             Text(
                 listMetaLine(dateText, progress),
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp),
+                color = cardTheme.secondaryTextColor.copy(alpha = 0.8f),
+                modifier = Modifier.padding(top = 6.dp),
             )
-            // Folder label, only when the note is in a folder (already in
-            // the list ViewModel state via folders; no new data model).
             if (!folderName.isNullOrBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                    SymbolIcon(Symbols.FOLDER, size = 14.sp)
-                    Text(folderName, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
+                    SymbolIcon(Symbols.FOLDER, size = 13.sp, color = cardTheme.secondaryTextColor)
+                    Text(
+                        folderName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cardTheme.secondaryTextColor,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
                 }
             }
-            Row {
+            Row(modifier = Modifier.padding(top = 4.dp)) {
                 when (tab) {
                     ListTab.ACTIVE -> {
-                        IconButton(onClick = onPin) { SymbolIcon(Symbols.PUSH_PIN, size = 20.sp, filled = note.pinned) }
-                        IconButton(onClick = onArchive) { SymbolIcon(Symbols.ARCHIVE, size = 20.sp) }
-                        IconButton(onClick = onTrash) { SymbolIcon(Symbols.DELETE, size = 20.sp) }
+                        IconButton(onClick = onPin) {
+                            SymbolIcon(
+                                Symbols.PUSH_PIN,
+                                size = 18.sp,
+                                filled = note.pinned,
+                                color = if (note.pinned) Color(0xFFE5A93C) else cardTheme.secondaryTextColor
+                            )
+                        }
+                        IconButton(onClick = onArchive) {
+                            SymbolIcon(Symbols.ARCHIVE, size = 18.sp, color = cardTheme.secondaryTextColor)
+                        }
+                        IconButton(onClick = onTrash) {
+                            SymbolIcon(Symbols.DELETE, size = 18.sp, color = cardTheme.secondaryTextColor)
+                        }
                     }
                     ListTab.ARCHIVED -> {
-                        IconButton(onClick = onUnarchive) { SymbolIcon(Symbols.UNARCHIVE, size = 20.sp) }
-                        IconButton(onClick = onTrash) { SymbolIcon(Symbols.DELETE, size = 20.sp) }
+                        IconButton(onClick = onUnarchive) {
+                            SymbolIcon(Symbols.UNARCHIVE, size = 18.sp, color = cardTheme.secondaryTextColor)
+                        }
+                        IconButton(onClick = onTrash) {
+                            SymbolIcon(Symbols.DELETE, size = 18.sp, color = cardTheme.secondaryTextColor)
+                        }
                     }
                     ListTab.TRASH -> {
-                        IconButton(onClick = onRestore) { SymbolIcon(Symbols.RESTORE_FROM_TRASH, size = 20.sp) }
-                        IconButton(onClick = onDelete) { SymbolIcon(Symbols.DELETE, size = 20.sp) }
+                        IconButton(onClick = onRestore) {
+                            SymbolIcon(Symbols.RESTORE_FROM_TRASH, size = 18.sp, color = cardTheme.secondaryTextColor)
+                        }
+                        IconButton(onClick = onDelete) {
+                            SymbolIcon(Symbols.DELETE, size = 18.sp, color = cardTheme.secondaryTextColor)
+                        }
                     }
                 }
             }

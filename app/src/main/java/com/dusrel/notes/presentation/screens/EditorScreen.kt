@@ -5,6 +5,12 @@ import android.app.TimePickerDialog
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,9 +18,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -22,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,11 +44,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dusrel.notes.presentation.theme.getNoteCardTheme
 import com.dusrel.notes.data.work.ExactAlarmScheduler
 import com.dusrel.notes.data.work.cancelReminder
 import com.dusrel.notes.data.work.scheduleReminder
@@ -170,106 +183,154 @@ fun EditorScreen(
         return
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        item {
-            // Single back affordance: the Scaffold TopAppBar back button in
-            // MainActivity. The old in-screen ARROW_BACK row is removed.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = {
-                    note = n.copy(archived = !n.archived)
-                    viewModel.setArchived(n, !n.archived)
-                }) {
-                    SymbolIcon(if (n.archived) Symbols.UNARCHIVE else Symbols.ARCHIVE)
-                }
-                IconButton(onClick = {
-                    if (n.trashed) {
-                        showDeleteConfirm = true
-                    } else {
-                        viewModel.moveToTrash(n)
-                        reminderScheduler.cancelAll(n.id)
-                        onBack()
-                    }
-                }) { SymbolIcon(Symbols.DELETE) }
-                IconButton(onClick = {
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, viewModel.noteToShareText(n.copy(title = title, content = doc?.text ?: ""), todos))
-                    }
-                    shareLauncher.launch(Intent.createChooser(intent, "Share note"))
-                }) { SymbolIcon(Symbols.SHARE) }
-                IconButton(onClick = { exportLauncher.launch("note-${n.id}.json") }) { SymbolIcon(Symbols.DOWNLOAD) }
-            }
-            val dateFormat = java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", locale)
-            Text(
-                "Created " + dateFormat.format(java.util.Date(n.createdAt)) +
-                    " • Updated " + dateFormat.format(java.util.Date(n.updatedAt)),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it; persist() },
-                label = { Text("Title") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            // Colour picker
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Colour: ", style = MaterialTheme.typography.bodyMedium)
-                listOf(0, 0xFFFFF3CD.toInt(), 0xFFD4EDDA.toInt(), 0xFFD1ECF1.toInt(), 0xFFF8D7DA.toInt()).forEach { c ->
+    val isDark = isSystemInDarkTheme()
+    val cardTheme = getNoteCardTheme(n.color, isDark)
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = cardTheme.containerColor,
+        contentColor = cardTheme.onContainerColor
+    ) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = {
-                        note = n.copy(color = c); viewModel.updateNote(n.copy(color = c))
+                        val newPinned = !n.pinned
+                        note = n.copy(pinned = newPinned)
+                        viewModel.updateNote(n.copy(pinned = newPinned))
                     }) {
-                        Text("●", color = if (c == 0) MaterialTheme.colorScheme.onSurface else Color(c), fontSize = 24.sp)
+                        SymbolIcon(
+                            Symbols.PUSH_PIN,
+                            filled = n.pinned,
+                            color = if (n.pinned) Color(0xFFE5A93C) else cardTheme.secondaryTextColor
+                        )
                     }
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(onClick = {
+                        note = n.copy(archived = !n.archived)
+                        viewModel.setArchived(n, !n.archived)
+                    }) {
+                        SymbolIcon(if (n.archived) Symbols.UNARCHIVE else Symbols.ARCHIVE, color = cardTheme.secondaryTextColor)
+                    }
+                    IconButton(onClick = {
+                        if (n.trashed) {
+                            showDeleteConfirm = true
+                        } else {
+                            viewModel.moveToTrash(n)
+                            reminderScheduler.cancelAll(n.id)
+                            onBack()
+                        }
+                    }) { SymbolIcon(Symbols.DELETE, color = cardTheme.secondaryTextColor) }
+                    IconButton(onClick = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, viewModel.noteToShareText(n.copy(title = title, content = doc?.text ?: ""), todos))
+                        }
+                        shareLauncher.launch(Intent.createChooser(intent, "Share note"))
+                    }) { SymbolIcon(Symbols.SHARE, color = cardTheme.secondaryTextColor) }
+                    IconButton(onClick = { exportLauncher.launch("note-${n.id}.json") }) { SymbolIcon(Symbols.DOWNLOAD, color = cardTheme.secondaryTextColor) }
                 }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Private", style = MaterialTheme.typography.bodyMedium)
-                Switch(
-                    checked = n.isPrivate,
-                    onCheckedChange = {
-                        note = n.copy(isPrivate = it); viewModel.updateNote(n.copy(isPrivate = it))
-                    }
+                val dateFormat = java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", locale)
+                Text(
+                    "Created " + dateFormat.format(java.util.Date(n.createdAt)) +
+                        " • Updated " + dateFormat.format(java.util.Date(n.updatedAt)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cardTheme.secondaryTextColor,
+                    modifier = Modifier.padding(bottom = 8.dp),
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Pinned", style = MaterialTheme.typography.bodyMedium)
-                Switch(
-                    checked = n.pinned,
-                    onCheckedChange = {
-                        note = n.copy(pinned = it); viewModel.updateNote(n.copy(pinned = it))
-                    }
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it; persist() },
+                    label = { Text("Title") },
+                    modifier = Modifier.fillMaxWidth()
                 )
-            }
-            Row {
-                OutlinedButton(onClick = { showFolderDialog = true }) {
-                    SymbolIcon(Symbols.FOLDER, size = 18.sp)
-                    Text(" Folder", modifier = Modifier.padding(start = 4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                // 5 Theme Swatches (Yellow, Blue, White, Green, Pink)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        "Theme:",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        color = cardTheme.secondaryTextColor
+                    )
+                    (0..4).forEach { themeId ->
+                        val previewTheme = getNoteCardTheme(themeId, isDark)
+                        val isSelected = (n.color % 5).let { if (it < 0) it + 5 else it } == themeId
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(previewTheme.containerColor)
+                                .border(
+                                    width = if (isSelected) 2.5.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else previewTheme.borderColor,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    note = n.copy(color = themeId)
+                                    viewModel.updateNote(n.copy(color = themeId))
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                SymbolIcon(Symbols.CHECK, size = 16.sp, color = previewTheme.onContainerColor)
+                            }
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                OutlinedButton(onClick = {
-                    val cal = Calendar.getInstance()
-                    DatePickerDialog(context, { _, y, m, d ->
-                        TimePickerDialog(context, { _, h, min ->
-                            val picked = Calendar.getInstance().apply {
-                                set(y, m, d, h, min, 0)
-                            }.timeInMillis
-                            val decision = reminderScheduler.schedule(
-                                n.id, title.ifBlank { "Untitled note" }, picked,
-                                ExactAlarmScheduler.canScheduleExactAlarms(context),
-                            )
-                            note = n.copy(reminderTime = picked, reminderExact = decision.label == "exact")
-                            viewModel.updateNote(n.copy(reminderTime = picked, reminderExact = decision.label == "exact"))
-                            reminderPathLabel = decision.label
-                            showReminderInfo = true
-                        }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
-                    }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
-                }) {
-                    SymbolIcon(Symbols.ALARM_ADD, size = 18.sp)
-                    Text(" Reminder", modifier = Modifier.padding(start = 4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Private", style = MaterialTheme.typography.bodyMedium, color = cardTheme.onContainerColor)
+                    Switch(
+                        checked = n.isPrivate,
+                        onCheckedChange = {
+                            note = n.copy(isPrivate = it); viewModel.updateNote(n.copy(isPrivate = it))
+                        }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(if (n.pinned) "Pinned" else "Unpinned", style = MaterialTheme.typography.bodyMedium, color = cardTheme.onContainerColor)
+                    Switch(
+                        checked = n.pinned,
+                        onCheckedChange = {
+                            note = n.copy(pinned = it); viewModel.updateNote(n.copy(pinned = it))
+                        }
+                    )
                 }
-            }
+                val currentFolder = folders.firstOrNull { it.id == n.folderId }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
+                    OutlinedButton(onClick = { showFolderDialog = true }) {
+                        SymbolIcon(Symbols.FOLDER, size = 18.sp, color = cardTheme.secondaryTextColor)
+                        Text(
+                            text = if (currentFolder != null) " " + currentFolder.name else " Move to folder",
+                            color = cardTheme.onContainerColor,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    OutlinedButton(onClick = {
+                        val cal = Calendar.getInstance()
+                        DatePickerDialog(context, { _, y, m, d ->
+                            TimePickerDialog(context, { _, h, min ->
+                                val picked = Calendar.getInstance().apply {
+                                    set(y, m, d, h, min, 0)
+                                }.timeInMillis
+                                val decision = reminderScheduler.schedule(
+                                    n.id, title.ifBlank { "Untitled note" }, picked,
+                                    ExactAlarmScheduler.canScheduleExactAlarms(context),
+                                )
+                                note = n.copy(reminderTime = picked, reminderExact = decision.label == "exact")
+                                viewModel.updateNote(n.copy(reminderTime = picked, reminderExact = decision.label == "exact"))
+                                reminderPathLabel = decision.label
+                                showReminderInfo = true
+                            }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
+                        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+                    }) {
+                        SymbolIcon(Symbols.ALARM_ADD, size = 18.sp, color = cardTheme.secondaryTextColor)
+                        Text(" Reminder", color = cardTheme.onContainerColor, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
             if (n.reminderTime != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -350,6 +411,7 @@ fun EditorScreen(
             }
         }
         item { Spacer(modifier = Modifier.height(32.dp)) }
+    }
     }
 
     // Trashed note in the editor: permanent delete uses the same

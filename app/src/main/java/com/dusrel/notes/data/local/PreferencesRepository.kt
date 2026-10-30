@@ -28,11 +28,13 @@ class PreferencesRepository(private val context: Context) {
     private val vaultVerifierKey = stringPreferencesKey("private_vault_verifier")
     private val lockoutStateKey = stringPreferencesKey("private_lockout_state")
     private val guideDoneKey = booleanPreferencesKey("guide_done")
+    private val isGridViewKey = booleanPreferencesKey("is_grid_view")
 
     val theme: Flow<ThemeSetting> = context.notesDataStore.data.map { prefs ->
         runCatching { ThemeSetting.valueOf(prefs[themeKey] ?: "SYSTEM") }.getOrDefault(ThemeSetting.SYSTEM)
     }
     val guideDone: Flow<Boolean> = context.notesDataStore.data.map { it[guideDoneKey] == true }
+    val isGridView: Flow<Boolean> = context.notesDataStore.data.map { it[isGridViewKey] ?: true }
 
     suspend fun setTheme(theme: ThemeSetting) {
         context.notesDataStore.edit { it[themeKey] = theme.name }
@@ -40,6 +42,10 @@ class PreferencesRepository(private val context: Context) {
     suspend fun setGuideDone() {
         context.notesDataStore.edit { it[guideDoneKey] = true }
     }
+    suspend fun setGridView(isGrid: Boolean) {
+        context.notesDataStore.edit { it[isGridViewKey] = isGrid }
+    }
+
     /** True when a vault (salt + verifier) exists. The PIN itself is never stored. */
     suspend fun hasPin(): Boolean {
         val prefs = context.notesDataStore.data.first()

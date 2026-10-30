@@ -44,6 +44,8 @@ class NotesViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeSetting.SYSTEM)
     val guideDone: StateFlow<Boolean> = preferences.guideDone
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isGridView: StateFlow<Boolean> = preferences.isGridView
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val query = MutableStateFlow("")
     val sortOrder = MutableStateFlow(SortOrder.PINNED_FIRST)
@@ -231,6 +233,14 @@ class NotesViewModel(
     fun deleteFolder(folder: Folder) {
         viewModelScope.launch { repository.deleteFolder(folder.id) }
     }
+
+    fun toggleGridView() {
+        viewModelScope.launch { preferences.setGridView(!isGridView.value) }
+    }
+    fun setGridView(isGrid: Boolean) {
+        viewModelScope.launch { preferences.setGridView(isGrid) }
+    }
+    fun updateNoteColor(note: Note, colorId: Int) = updateNote(note.copy(color = colorId))
 
     fun setTheme(theme: ThemeSetting) {
         viewModelScope.launch { preferences.setTheme(theme) }
