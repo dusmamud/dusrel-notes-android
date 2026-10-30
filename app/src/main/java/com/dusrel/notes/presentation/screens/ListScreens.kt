@@ -470,7 +470,7 @@ fun NotesListScreen(
             }
         }
 
-        // Single Primary Floating Action Button (FAB) matching HyperOS phone architecture
+        // Single Primary Floating Action Button (FAB) matching modern phone architecture
         val isFabVisible = !pagerState.isScrollInProgress
         AnimatedVisibility(
             visible = isFabVisible,
@@ -499,7 +499,7 @@ fun NotesListScreen(
         }
     }
 
-    // Quick Task Creator Bottom Sheet (HyperOS createCommonTodo Parity)
+    // Quick Task Creator Bottom Sheet (modern createCommonTodo Parity)
     if (showCreateTaskSheet) {
         val taskNotes = notes.filter { it.type == NoteType.TODO }
         ModalBottomSheet(

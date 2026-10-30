@@ -141,31 +141,6 @@ fun EditorScreen(
     }
 
     
-    val undoStack = remember { mutableStateListOf<RichDocument>() }
-    val redoStack = remember { mutableStateListOf<RichDocument>() }
-
-    fun performUndo() {
-        if (undoStack.isNotEmpty()) {
-            val prev = undoStack.removeAt(undoStack.lastIndex)
-            doc?.let { redoStack.add(it) }
-            doc = prev
-            current?.let {
-                viewModel.saveNoteDebounced(it.copy(title = title, content = prev.text, richTextSpans = prev.toSpansJson(), doodleData = doodleData))
-            }
-        }
-    }
-
-    fun performRedo() {
-        if (redoStack.isNotEmpty()) {
-            val next = redoStack.removeAt(redoStack.lastIndex)
-            doc?.let { undoStack.add(it) }
-            doc = next
-            current?.let {
-                viewModel.saveNoteDebounced(it.copy(title = title, content = next.text, richTextSpans = next.toSpansJson(), doodleData = doodleData))
-            }
-        }
-    }
-
     val current = note
 
     fun persist() {
@@ -174,6 +149,27 @@ fun EditorScreen(
             viewModel.saveNoteDebounced(
                 it.copy(title = title, content = d.text, richTextSpans = d.toSpansJson(), doodleData = doodleData)
             )
+        }
+    }
+
+    val undoStack = remember { mutableStateListOf<RichDocument>() }
+    val redoStack = remember { mutableStateListOf<RichDocument>() }
+
+    fun performUndo() {
+        if (undoStack.isNotEmpty()) {
+            val prev = undoStack.removeAt(undoStack.lastIndex)
+            doc?.let { redoStack.add(it) }
+            doc = prev
+            persist()
+        }
+    }
+
+    fun performRedo() {
+        if (redoStack.isNotEmpty()) {
+            val next = redoStack.removeAt(redoStack.lastIndex)
+            doc?.let { undoStack.add(it) }
+            doc = next
+            persist()
         }
     }
 
