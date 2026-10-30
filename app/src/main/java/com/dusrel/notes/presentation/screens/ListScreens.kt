@@ -3,9 +3,18 @@ package com.dusrel.notes.presentation.screens
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -101,9 +110,7 @@ import com.dusrel.notes.presentation.viewmodel.ListTab
 import com.dusrel.notes.presentation.viewmodel.NotesViewModel
 import kotlinx.coroutines.launch
 
-enum class HomeTopTab { NOTES, TASKS }
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NotesListScreen(
     viewModel: NotesViewModel,
@@ -137,7 +144,8 @@ fun NotesListScreen(
         )
     }
 
-    var selectedTopTab by remember { mutableStateOf(HomeTopTab.NOTES) }
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
+    val coroutineScope = rememberCoroutineScope()
     var isSearchExpanded by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
@@ -155,12 +163,9 @@ fun NotesListScreen(
         shareLauncher.launch(Intent.createChooser(intent, "Share note"))
     }
 
-    val activeNotesCount = allNotes.count { !it.trashed && !it.archived && it.type != NoteType.TODO }
-    val activeTasksCount = allNotes.count { !it.trashed && !it.archived && it.type == NoteType.TODO }
-
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Top App Bar / Header
+            // Top App Bar / Action Bar Header
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -172,36 +177,31 @@ fun NotesListScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Segmented Top Switcher: Notes | Tasks
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Single Dynamic Title (Notes vs Tasks)
+                    AnimatedContent(
+                        targetState = pagerState.currentPage,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "ActionBarTitle"
+                    ) { page ->
                         Text(
-                            text = "Notes",
-                            fontSize = if (selectedTopTab == HomeTopTab.NOTES) 28.sp else 20.sp,
-                            fontWeight = if (selectedTopTab == HomeTopTab.NOTES) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedTopTab == HomeTopTab.NOTES) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.38f),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedTopTab = HomeTopTab.NOTES }
-                                .padding(end = 16.dp, top = 4.dp, bottom = 4.dp)
-                        )
-                        Text(
-                            text = "Tasks",
-                            fontSize = if (selectedTopTab == HomeTopTab.TASKS) 28.sp else 20.sp,
-                            fontWeight = if (selectedTopTab == HomeTopTab.TASKS) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedTopTab == HomeTopTab.TASKS) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.38f),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedTopTab = HomeTopTab.TASKS }
-                                .padding(horizontal = 4.dp, vertical = 4.dp)
+                            text = if (page == 0) "Notes" else "Tasks",
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
 
-                    // Top Action Icons
+                    // Top Action Bar Icons
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Search Button (collapsible per authentic app:headerClose="true")
                         IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                             SymbolIcon(Symbols.SEARCH, size = 22.sp, color = MaterialTheme.colorScheme.onBackground)
                         }
-                        if (selectedTopTab == HomeTopTab.NOTES) {
+                        // Notes-only Action Icons: Grid/List Toggle & Folder Management
+                        if (pagerState.currentPage == 0) {
                             IconButton(onClick = { viewModel.toggleGridView() }) {
                                 SymbolIcon(
                                     if (isGrid) Symbols.VIEW_LIST else Symbols.GRID_VIEW,
@@ -221,11 +221,13 @@ fun NotesListScreen(
                                 expanded = showOverflowMenu,
                                 onDismissRequest = { showOverflowMenu = false }
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("Sort notes") },
-                                    leadingIcon = { SymbolIcon(Symbols.SORT, size = 18.sp) },
-                                    onClick = { showOverflowMenu = false; showSortDialog = true }
-                                )
+                                if (pagerState.currentPage == 0) {
+                                    DropdownMenuItem(
+                                        text = { Text("Sort notes") },
+                                        leadingIcon = { SymbolIcon(Symbols.SORT, size = 18.sp) },
+                                        onClick = { showOverflowMenu = false; showSortDialog = true }
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text("Private Vault") },
                                     leadingIcon = { SymbolIcon(Symbols.LOCK, size = 18.sp) },
@@ -254,8 +256,12 @@ fun NotesListScreen(
                     }
                 }
 
-                // Expandable Search Bar Capsule
-                AnimatedVisibility(visible = isSearchExpanded) {
+                // Expandable Search Bar Capsule (Collapsed by default per app:headerClose="true")
+                AnimatedVisibility(
+                    visible = isSearchExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
                     Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                         OutlinedTextField(
                             value = query,
@@ -282,8 +288,8 @@ fun NotesListScreen(
                     }
                 }
 
-                // Folder & Status Filter Strip
-                if (selectedTopTab == HomeTopTab.NOTES && folders.isNotEmpty()) {
+                // Folder & Status Filter Strip (Notes tab only)
+                if (pagerState.currentPage == 0 && folders.isNotEmpty()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -347,109 +353,194 @@ fun NotesListScreen(
                 }
             }
 
-            // Main Content Area
-            if (selectedTopTab == HomeTopTab.NOTES) {
-                // Notes View
-                val filteredNotes = notes.filter { it.type != NoteType.TODO }
-                if (filteredNotes.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            SymbolIcon(Symbols.DESCRIPTION, size = 52.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-                            Text(
-                                if (query.isNotBlank()) "No notes matching \"$query\""
-                                else if (tab == ListTab.TRASH) "Trash is empty"
-                                else "No notes here yet",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 12.dp)
-                            )
-                            Text(
-                                "Tap + below to create a quick note or sketch.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
+            // Main Sliding ViewPager Content (2-Page HorizontalPager)
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) { page ->
+                if (page == 0) {
+                    // Notes View
+                    val filteredNotes = notes.filter { it.type != NoteType.TODO }
+                    if (filteredNotes.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                SymbolIcon(Symbols.DESCRIPTION, size = 52.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                                Text(
+                                    if (query.isNotBlank()) "No notes matching "$query""
+                                    else if (tab == ListTab.TRASH) "Trash is empty"
+                                    else "No notes here yet",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 12.dp)
+                                )
+                                Text(
+                                    "Tap + below to create a quick note or sketch.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
                         }
-                    }
-                } else if (isGrid) {
-                    LazyVerticalStaggeredGrid(
-                        columns = StaggeredGridCells.Adaptive(minSize = 160.dp),
-                        verticalItemSpacing = 10.dp,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 100.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(filteredNotes, key = { it.id }) { note ->
-                            NoteCard(
-                                note = note,
-                                isGrid = true,
-                                todos = todosByNote[note.id].orEmpty(),
-                                folderName = folders.firstOrNull { it.id == note.folderId }?.name,
-                                locale = locale,
-                                onOpen = { onOpenNote(note.id) },
-                                onLongPress = { actionNoteSheet = note },
-                            )
+                    } else if (isGrid) {
+                        LazyVerticalStaggeredGrid(
+                            columns = StaggeredGridCells.Fixed(2),
+                            verticalItemSpacing = 9.45.dp,
+                            horizontalArrangement = Arrangement.spacedBy(9.45.dp),
+                            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 120.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(filteredNotes, key = { it.id }) { note ->
+                                NoteCard(
+                                    note = note,
+                                    isGrid = true,
+                                    todos = todosByNote[note.id].orEmpty(),
+                                    folderName = folders.firstOrNull { it.id == note.folderId }?.name,
+                                    locale = locale,
+                                    onOpen = { onOpenNote(note.id) },
+                                    onLongPress = { actionNoteSheet = note },
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(9.45.dp),
+                            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 120.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(filteredNotes, key = { it.id }) { note ->
+                                NoteCard(
+                                    note = note,
+                                    isGrid = false,
+                                    todos = todosByNote[note.id].orEmpty(),
+                                    folderName = folders.firstOrNull { it.id == note.folderId }?.name,
+                                    locale = locale,
+                                    onOpen = { onOpenNote(note.id) },
+                                    onLongPress = { actionNoteSheet = note },
+                                )
+                            }
                         }
                     }
                 } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 100.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(filteredNotes, key = { it.id }) { note ->
-                            NoteCard(
-                                note = note,
-                                isGrid = false,
-                                todos = todosByNote[note.id].orEmpty(),
-                                folderName = folders.firstOrNull { it.id == note.folderId }?.name,
-                                locale = locale,
-                                onOpen = { onOpenNote(note.id) },
-                                onLongPress = { actionNoteSheet = note },
-                            )
+                    // Tasks / Todo View
+                    val taskNotes = notes.filter { it.type == NoteType.TODO }
+                    TasksView(
+                        taskNotes = taskNotes,
+                        todosByNote = todosByNote,
+                        folders = folders,
+                        locale = locale,
+                        viewModel = viewModel,
+                        reminderScheduler = reminderScheduler,
+                        onOpenNote = onOpenNote,
+                        newQuickTaskText = newQuickTaskText,
+                        onNewQuickTaskTextChange = { newQuickTaskText = it },
+                        onAddQuickTask = {
+                            if (newQuickTaskText.isNotBlank()) {
+                                val activeNote = taskNotes.firstOrNull { !it.trashed && !it.archived }
+                                if (activeNote != null) {
+                                    viewModel.addTodo(activeNote.id, newQuickTaskText.trim())
+                                } else {
+                                    viewModel.createNote(NoteType.TODO) { newId ->
+                                        viewModel.addTodo(newId, newQuickTaskText.trim())
+                                    }
+                                }
+                                newQuickTaskText = ""
+                            }
                         }
+                    )
+                }
+            }
+
+            // Bottom Navigation Bar (Persistent 60dp matching bottom_nav_menu.xml)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val isNotesActive = pagerState.currentPage == 0
+                    val isTasksActive = pagerState.currentPage == 1
+
+                    // Notes Tab
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(0)
+                                }
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        SymbolIcon(
+                            codePoint = Symbols.DESCRIPTION,
+                            size = 22.sp,
+                            color = if (isNotesActive) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            filled = isNotesActive
+                        )
+                        Text(
+                            text = "Notes",
+                            fontSize = 11.sp,
+                            fontWeight = if (isNotesActive) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isNotesActive) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+
+                    // Tasks Tab
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(1)
+                                }
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        SymbolIcon(
+                            codePoint = Symbols.CHECKLIST,
+                            size = 22.sp,
+                            color = if (isTasksActive) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            filled = isTasksActive
+                        )
+                        Text(
+                            text = "Tasks",
+                            fontSize = 11.sp,
+                            fontWeight = if (isTasksActive) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isTasksActive) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
                     }
                 }
-            } else {
-                // Tasks / Todo View
-                val taskNotes = notes.filter { it.type == NoteType.TODO }
-                TasksView(
-                    taskNotes = taskNotes,
-                    todosByNote = todosByNote,
-                    folders = folders,
-                    locale = locale,
-                    viewModel = viewModel,
-                    reminderScheduler = reminderScheduler,
-                    onOpenNote = onOpenNote,
-                    newQuickTaskText = newQuickTaskText,
-                    onNewQuickTaskTextChange = { newQuickTaskText = it },
-                    onAddQuickTask = {
-                        if (newQuickTaskText.isNotBlank()) {
-                            val activeNote = taskNotes.firstOrNull { !it.trashed && !it.archived }
-                            if (activeNote != null) {
-                                viewModel.addTodo(activeNote.id, newQuickTaskText.trim())
-                            } else {
-                                viewModel.createNote(NoteType.TODO) { newId ->
-                                    viewModel.addTodo(newId, newQuickTaskText.trim())
-                                }
-                            }
-                            newQuickTaskText = ""
-                        }
-                    }
-                )
             }
         }
 
-        // Dual Floating Action Buttons (FAB) at Bottom
+        // Dual Floating Action Buttons (FAB) Positioned Above Bottom Navigation Bar
         Row(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 22.dp, bottom = 28.dp),
+                .padding(end = 22.dp, bottom = 76.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Companion Secondary FAB (Doodle / Sketch)
-            if (selectedTopTab == HomeTopTab.NOTES) {
+            // Companion Secondary Stylus FAB (Doodle / Sketch) - smoothly animates down to 0 on Tasks tab
+            AnimatedVisibility(
+                visible = pagerState.currentPage == 0,
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut()
+            ) {
                 FloatingActionButton(
                     onClick = { viewModel.createNote(NoteType.DOODLE, onOpenNote) },
                     shape = CircleShape,
@@ -465,7 +556,7 @@ fun NotesListScreen(
             // Primary Main FAB (+ New Note or Task)
             FloatingActionButton(
                 onClick = {
-                    if (selectedTopTab == HomeTopTab.NOTES) {
+                    if (pagerState.currentPage == 0) {
                         viewModel.createNote(NoteType.NOTE, onOpenNote)
                     } else {
                         viewModel.createNote(NoteType.TODO, onOpenNote)
@@ -858,7 +949,7 @@ private fun TasksView(
             }
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 // Open / Uncompleted Tasks
@@ -909,13 +1000,13 @@ fun TaskSquircleCheckbox(
 ) {
     Box(
         modifier = modifier
-            .size(20.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .size(18.dp)
+            .clip(RoundedCornerShape(5.dp))
             .background(if (checked) ThemeMainGold else Color.Transparent)
             .border(
-                width = if (checked) 0.dp else 2.dp,
+                width = if (checked) 0.dp else 1.8.dp,
                 color = if (checked) Color.Transparent else TodoCheckboxOutline,
-                shape = RoundedCornerShape(6.dp)
+                shape = RoundedCornerShape(5.dp)
             )
             .clickable(onClick = onCheckedChange),
         contentAlignment = Alignment.Center
@@ -923,7 +1014,7 @@ fun TaskSquircleCheckbox(
         if (checked) {
             SymbolIcon(
                 Symbols.CHECK,
-                size = 14.sp,
+                size = 12.sp,
                 color = Color(0xFF2D261A),
             )
         }
