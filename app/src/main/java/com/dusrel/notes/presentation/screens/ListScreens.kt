@@ -781,7 +781,7 @@ fun NotesListScreen(
                                         }
                                         toolboxQuickNoteText = ""
                                     }) {
-                                        SymbolIcon(Symbols.ARROW_FORWARD, size = 18.sp, color = ThemeMainGold)
+                                        SymbolIcon(Symbols.CHEVRON_RIGHT, size = 18.sp, color = ThemeMainGold)
                                     }
                                 }
                             },
