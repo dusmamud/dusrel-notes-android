@@ -22,11 +22,13 @@
 
 ## Phase 2: Home Screen (Notes & Tasks) 1000% Mirror
 - [x] Step 2.1: Action Bar 1:1 Parity
-  - Single dynamic title ("Notes" vs "Tasks") with 56dp height.
-  - Notes tab shows: Search, Grid toggle, Folder manager, 3-dots menu.
-  - Tasks tab automatically hides: Folder manager and Grid toggle.
+  - Dynamic Collapsible Action Bar: 28sp Bold Large Left Title collapses into 18sp Semi-Bold Title at Top Center of 56dp Action Bar on vertical scroll down.
+  - Top-Right Action Icons: Folder Manager (Notes-only: scales down & fades out on Tasks tab) + Settings gear (permanent on right).
+  - Eliminated all synthetic buttons (no Search button, no Grid toggle, no 3-dots overflow in Action Bar).
+  - Sticky folder pills filter bar (`data_folder_list_layout.xml` parity) below header on Notes tab.
 - [x] Step 2.2: Collapsible Search Capsule (`headerClose="true"`)
-  - By default collapsed; revealed on search icon tap or pull-down overscroll.
+  - By default collapsed; revealed on pull-down overscroll gesture.
+  - Deep pull-down past threshold triggers Private Vault challenge.
 - [x] Step 2.3: Notes Masonry Staggered Grid
   - 2-column staggered grid, 16dp squircle radius, 16dp internal padding, 5 color presets.
   - Card footer with date/folder tag and status badges (pin, doodle, reminder, lock).

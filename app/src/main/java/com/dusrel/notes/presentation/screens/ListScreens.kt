@@ -4,6 +4,15 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -147,13 +156,77 @@ fun NotesListScreen(
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
     var isSearchExpanded by remember { mutableStateOf(false) }
-    var showSortDialog by remember { mutableStateOf(false) }
-    var showOverflowMenu by remember { mutableStateOf(false) }
     var actionNoteSheet by remember { mutableStateOf<Note?>(null) }
     var moveFolderNote by remember { mutableStateOf<Note?>(null) }
     var confirmDeleteNote by remember { mutableStateOf<Note?>(null) }
     var showCreateTaskSheet by remember { mutableStateOf(false) }
     var quickTaskInput by remember { mutableStateOf("") }
+
+    val notesGridState = rememberLazyStaggeredGridState()
+    val notesListState = rememberLazyListState()
+    val tasksListState = rememberLazyListState()
+
+    // Determine if user has scrolled down into list
+    val isScrolledDown = remember(
+        pagerState.currentPage,
+        isGrid,
+        notesGridState.firstVisibleItemIndex,
+        notesGridState.firstVisibleItemScrollOffset,
+        notesListState.firstVisibleItemIndex,
+        notesListState.firstVisibleItemScrollOffset,
+        tasksListState.firstVisibleItemIndex,
+        tasksListState.firstVisibleItemScrollOffset
+    ) {
+        if (pagerState.currentPage == 0) {
+            if (isGrid) {
+                notesGridState.firstVisibleItemIndex > 0 || notesGridState.firstVisibleItemScrollOffset > 30
+            } else {
+                notesListState.firstVisibleItemIndex > 0 || notesListState.firstVisibleItemScrollOffset > 30
+            }
+        } else {
+            tasksListState.firstVisibleItemIndex > 0 || tasksListState.firstVisibleItemScrollOffset > 30
+        }
+    }
+
+    val titleCollapseFraction by animateFloatAsState(
+        targetValue = if (isScrolledDown) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "titleCollapse"
+    )
+
+    // Pull-down overscroll gesture for search capsule and private vault
+    var overscrollPullDistance by remember { mutableStateOf(0f) }
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < 0 && overscrollPullDistance > 0f) {
+                    val consumed = available.y.coerceAtLeast(-overscrollPullDistance)
+                    overscrollPullDistance += consumed
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (available.y > 0) {
+                    overscrollPullDistance += available.y * 0.45f
+                    if (overscrollPullDistance > 140f && !isSearchExpanded) {
+                        isSearchExpanded = true
+                    }
+                    if (overscrollPullDistance > 350f && pagerState.currentPage == 0) {
+                        onOpenPrivate()
+                        overscrollPullDistance = 0f
+                    }
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+        }
+    }
 
     val shareLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
     fun shareNote(note: Note) {
@@ -166,146 +239,192 @@ fun NotesListScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Top App Bar / Action Bar Header
-            Column(
+            // Fixed 56dp Action Bar Header (with Center Collapsed Title & Top-Right Icons)
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .height(56.dp),
+                color = MaterialTheme.colorScheme.background,
+                shadowElevation = if (isScrolledDown) 2.dp else 0.dp,
+                border = if (isScrolledDown) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)) else null
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Single Dynamic Title (Notes vs Tasks)
+                    // Small Center Title (Collapses to Top Center on vertical scroll)
                     AnimatedContent(
                         targetState = pagerState.currentPage,
                         transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "ActionBarTitle"
+                        label = "CollapsedCenterTitle",
+                        modifier = Modifier.alpha(titleCollapseFraction)
+                    ) { page ->
+                        Text(
+                            text = if (page == 0) "Notes" else "Tasks",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+
+                    // Top Action Bar Icons on the Far Right (Folder + Settings)
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Folder Manager (Notes-only: scales down & fades out on Tasks tab)
+                        AnimatedVisibility(
+                            visible = pagerState.currentPage == 0,
+                            enter = fadeIn() + scaleIn(),
+                            exit = fadeOut() + scaleOut()
+                        ) {
+                            IconButton(onClick = onOpenFolders) {
+                                SymbolIcon(
+                                    Symbols.FOLDER,
+                                    size = 24.sp,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            }
+                        }
+
+                        // Settings Icon (Permanent on Far Right for both Notes and Tasks)
+                        IconButton(onClick = onOpenSettings) {
+                            SymbolIcon(
+                                Symbols.SETTINGS,
+                                size = 24.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Expanded Large Title Header (Collapses upwards & fades out on vertical scroll)
+            if (titleCollapseFraction < 0.99f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .alpha((1f - titleCollapseFraction).coerceIn(0f, 1f))
+                        .padding(
+                            start = 18.dp,
+                            end = 18.dp,
+                            top = (4 * (1f - titleCollapseFraction)).dp,
+                            bottom = (6 * (1f - titleCollapseFraction)).dp
+                        )
+                ) {
+                    AnimatedContent(
+                        targetState = pagerState.currentPage,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "ExpandedLargeTitle"
                     ) { page ->
                         Text(
                             text = if (page == 0) "Notes" else "Tasks",
                             style = MaterialTheme.typography.displayLarge.copy(
                                 fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.Bold
                             ),
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     }
-
-                    // Top Action Bar Icons
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Search Button (collapsible per authentic app:headerClose="true")
-                        IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
-                            SymbolIcon(Symbols.SEARCH, size = 22.sp, color = MaterialTheme.colorScheme.onBackground)
-                        }
-                        // Notes-only Action Icons: Grid/List Toggle & Folder Management
-                        if (pagerState.currentPage == 0) {
-                            IconButton(onClick = { viewModel.toggleGridView() }) {
-                                SymbolIcon(
-                                    if (isGrid) Symbols.VIEW_LIST else Symbols.GRID_VIEW,
-                                    size = 22.sp,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                            }
-                            IconButton(onClick = onOpenFolders) {
-                                SymbolIcon(Symbols.FOLDER, size = 22.sp, color = MaterialTheme.colorScheme.onBackground)
-                            }
-                        }
-                        Box {
-                            IconButton(onClick = { showOverflowMenu = true }) {
-                                SymbolIcon(Symbols.MORE_VERT, size = 22.sp, color = MaterialTheme.colorScheme.onBackground)
-                            }
-                            DropdownMenu(
-                                expanded = showOverflowMenu,
-                                onDismissRequest = { showOverflowMenu = false }
-                            ) {
-                                if (pagerState.currentPage == 0) {
-                                    DropdownMenuItem(
-                                        text = { Text("Sort notes") },
-                                        leadingIcon = { SymbolIcon(Symbols.SORT, size = 18.sp) },
-                                        onClick = { showOverflowMenu = false; showSortDialog = true }
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("Private Vault") },
-                                    leadingIcon = { SymbolIcon(Symbols.LOCK, size = 18.sp) },
-                                    onClick = { showOverflowMenu = false; onOpenPrivate() }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Reminders") },
-                                    leadingIcon = { SymbolIcon(Symbols.ALARM, size = 18.sp) },
-                                    onClick = { showOverflowMenu = false; onOpenReminders() }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (tab == ListTab.TRASH) "Show active notes" else "Trash") },
-                                    leadingIcon = { SymbolIcon(Symbols.DELETE, size = 18.sp) },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        viewModel.listTab.value = if (tab == ListTab.TRASH) ListTab.ACTIVE else ListTab.TRASH
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Settings") },
-                                    leadingIcon = { SymbolIcon(Symbols.SETTINGS, size = 18.sp) },
-                                    onClick = { showOverflowMenu = false; onOpenSettings() }
-                                )
-                            }
-                        }
-                    }
                 }
+            }
 
-                // Expandable Search Bar Capsule (Collapsed by default per app:headerClose="true")
-                AnimatedVisibility(
-                    visible = isSearchExpanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
+            // Expandable Search Bar Capsule (Collapsed by default per app:headerClose="true")
+            AnimatedVisibility(
+                visible = isSearchExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { viewModel.query.value = it },
+                        placeholder = { Text("Search notes and tasks…", fontSize = 14.sp) },
+                        leadingIcon = { SymbolIcon(Symbols.SEARCH, size = 18.sp) },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                if (query.isNotBlank()) viewModel.query.value = ""
+                                else isSearchExpanded = false
+                            }) {
+                                SymbolIcon(Symbols.CLOSE, size = 18.sp)
+                            }
+                        },
+                        shape = RoundedCornerShape(22.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        singleLine = true
+                    )
+                }
+            }
+
+            // Sticky Folder Pill Chips Filter (data_folder_list_layout.xml parity - Notes tab only)
+            if (pagerState.currentPage == 0 && folders.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = { viewModel.query.value = it },
-                            placeholder = { Text("Search notes and tasks…", fontSize = 14.sp) },
-                            leadingIcon = { SymbolIcon(Symbols.SEARCH, size = 18.sp) },
-                            trailingIcon = {
-                                if (query.isNotBlank()) {
-                                    IconButton(onClick = { viewModel.query.value = "" }) {
-                                        SymbolIcon(Symbols.CLOSE, size = 18.sp)
-                                    }
-                                }
-                            },
-                            shape = RoundedCornerShape(22.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            ),
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            singleLine = true
+                    val isAllSelected = folderFilter == null
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isAllSelected) ThemeMainGold else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (isAllSelected) Color(0xFF2D261A) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clickable { viewModel.folderFilterId.value = null }
+                    ) {
+                        Text(
+                            text = "All",
+                            fontSize = 12.sp,
+                            fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
                     }
-                }
-
-
-
-                if (tab == ListTab.TRASH) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text("Trash view active", fontSize = 12.sp, color = MaterialTheme.colorScheme.onErrorContainer)
-                            TextButton(onClick = { viewModel.listTab.value = ListTab.ACTIVE }) {
-                                Text("Back to Notes", fontSize = 12.sp)
+                    folders.forEach { folder ->
+                        val isSelected = folderFilter == folder.id
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isSelected) ThemeMainGold else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (isSelected) Color(0xFF2D261A) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.clickable {
+                                viewModel.folderFilterId.value = if (isSelected) null else folder.id
                             }
+                        ) {
+                            Text(
+                                text = folder.name,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (tab == ListTab.TRASH) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Trash view active", fontSize = 12.sp, color = MaterialTheme.colorScheme.onErrorContainer)
+                        TextButton(onClick = { viewModel.listTab.value = ListTab.ACTIVE }) {
+                            Text("Back to Notes", fontSize = 12.sp)
                         }
                     }
                 }
@@ -317,6 +436,7 @@ fun NotesListScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .nestedScroll(nestedScrollConnection)
             ) { page ->
                 if (page == 0) {
                     // Notes View
@@ -343,6 +463,7 @@ fun NotesListScreen(
                         }
                     } else if (isGrid) {
                         LazyVerticalStaggeredGrid(
+                            state = notesGridState,
                             columns = StaggeredGridCells.Fixed(2),
                             verticalItemSpacing = 9.45.dp,
                             horizontalArrangement = Arrangement.spacedBy(9.45.dp),
@@ -363,6 +484,7 @@ fun NotesListScreen(
                         }
                     } else {
                         LazyColumn(
+                            state = notesListState,
                             verticalArrangement = Arrangement.spacedBy(9.45.dp),
                             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 120.dp),
                             modifier = Modifier.fillMaxSize()
@@ -391,6 +513,7 @@ fun NotesListScreen(
                         viewModel = viewModel,
                         reminderScheduler = reminderScheduler,
                         onOpenNote = onOpenNote,
+                        listState = tasksListState,
                     )
                 }
             }
@@ -887,6 +1010,7 @@ private fun TasksView(
     viewModel: NotesViewModel,
     reminderScheduler: ReminderScheduler,
     onOpenNote: (Long) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
 ) {
     var filter by remember { mutableStateOf(TodoFilter.ALL) }
     val allTodoItems = taskNotes.flatMap { todosByNote[it.id].orEmpty() }
@@ -915,6 +1039,7 @@ private fun TasksView(
             }
         } else {
             LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
