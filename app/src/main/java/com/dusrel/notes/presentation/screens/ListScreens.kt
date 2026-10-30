@@ -152,7 +152,8 @@ fun NotesListScreen(
     var actionNoteSheet by remember { mutableStateOf<Note?>(null) }
     var moveFolderNote by remember { mutableStateOf<Note?>(null) }
     var confirmDeleteNote by remember { mutableStateOf<Note?>(null) }
-    var newQuickTaskText by remember { mutableStateOf("") }
+    var showCreateTaskSheet by remember { mutableStateOf(false) }
+    var quickTaskInput by remember { mutableStateOf("") }
 
     val shareLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
     fun shareNote(note: Note) {
@@ -288,50 +289,7 @@ fun NotesListScreen(
                     }
                 }
 
-                // Folder & Status Filter Strip (Notes tab only)
-                if (pagerState.currentPage == 0 && folders.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 10.dp)
-                            .horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val isAllSelected = folderFilter == null
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isAllSelected) ThemeMainGold else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.clickable { viewModel.folderFilterId.value = null }
-                        ) {
-                            Text(
-                                "All (${allNotes.size})",
-                                fontSize = 12.sp,
-                                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isAllSelected) Color(0xFF2D261A) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
-                        folders.forEach { folder ->
-                            val isSelected = folderFilter == folder.id
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = if (isSelected) ThemeMainGold else MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.clickable {
-                                    viewModel.folderFilterId.value = if (isSelected) null else folder.id
-                                }
-                            ) {
-                                Text(
-                                    folder.name,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) Color(0xFF2D261A) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-                }
+
 
                 if (tab == ListTab.TRASH) {
                     Surface(
@@ -433,21 +391,6 @@ fun NotesListScreen(
                         viewModel = viewModel,
                         reminderScheduler = reminderScheduler,
                         onOpenNote = onOpenNote,
-                        newQuickTaskText = newQuickTaskText,
-                        onNewQuickTaskTextChange = { newQuickTaskText = it },
-                        onAddQuickTask = {
-                            if (newQuickTaskText.isNotBlank()) {
-                                val activeNote = taskNotes.firstOrNull { !it.trashed && !it.archived }
-                                if (activeNote != null) {
-                                    viewModel.addTodo(activeNote.id, newQuickTaskText.trim())
-                                } else {
-                                    viewModel.createNote(NoteType.TODO) { newId ->
-                                        viewModel.addTodo(newId, newQuickTaskText.trim())
-                                    }
-                                }
-                                newQuickTaskText = ""
-                            }
-                        }
                     )
                 }
             }
@@ -527,39 +470,22 @@ fun NotesListScreen(
             }
         }
 
-        // Dual Floating Action Buttons (FAB) Positioned Above Bottom Navigation Bar
-        Row(
+        // Single Primary Floating Action Button (FAB) matching HyperOS phone architecture
+        val isFabVisible = !pagerState.isScrollInProgress
+        AnimatedVisibility(
+            visible = isFabVisible,
+            enter = scaleIn() + fadeIn(),
+            exit = scaleOut() + fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 22.dp, bottom = 76.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(end = 22.dp, bottom = 78.dp)
         ) {
-            // Companion Secondary Stylus FAB (Doodle / Sketch) - smoothly animates down to 0 on Tasks tab
-            AnimatedVisibility(
-                visible = pagerState.currentPage == 0,
-                enter = scaleIn() + fadeIn(),
-                exit = scaleOut() + fadeOut()
-            ) {
-                FloatingActionButton(
-                    onClick = { viewModel.createNote(NoteType.DOODLE, onOpenNote) },
-                    shape = CircleShape,
-                    containerColor = if (isDark) CardBgDark else CardBgLight,
-                    contentColor = ThemeMainGold,
-                    elevation = FloatingActionButtonDefaults.elevation(3.dp),
-                    modifier = Modifier.size(52.dp)
-                ) {
-                    SymbolIcon(Symbols.DRAW, size = 22.sp, color = ThemeMainGold)
-                }
-            }
-
-            // Primary Main FAB (+ New Note or Task)
             FloatingActionButton(
                 onClick = {
                     if (pagerState.currentPage == 0) {
                         viewModel.createNote(NoteType.NOTE, onOpenNote)
                     } else {
-                        viewModel.createNote(NoteType.TODO, onOpenNote)
+                        showCreateTaskSheet = true
                     }
                 },
                 shape = CircleShape,
@@ -569,6 +495,83 @@ fun NotesListScreen(
                 modifier = Modifier.size(58.dp)
             ) {
                 SymbolIcon(Symbols.ADD, size = 30.sp, color = Color(0xFF2D261A))
+            }
+        }
+    }
+
+    // Quick Task Creator Bottom Sheet (HyperOS createCommonTodo Parity)
+    if (showCreateTaskSheet) {
+        val taskNotes = notes.filter { it.type == NoteType.TODO }
+        ModalBottomSheet(
+            onDismissRequest = {
+                showCreateTaskSheet = false
+                quickTaskInput = ""
+            },
+            sheetState = rememberModalBottomSheetState()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+            ) {
+                Text(
+                    text = "New task",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                OutlinedTextField(
+                    value = quickTaskInput,
+                    onValueChange = { quickTaskInput = it },
+                    placeholder = { Text("What needs to be done?", fontSize = 15.sp) },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        focusedIndicatorColor = ThemeMainGold,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
+                    maxLines = 4
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = {
+                        showCreateTaskSheet = false
+                        quickTaskInput = ""
+                    }) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (quickTaskInput.isNotBlank()) {
+                                val activeNote = taskNotes.firstOrNull { !it.trashed && !it.archived }
+                                if (activeNote != null) {
+                                    viewModel.addTodo(activeNote.id, quickTaskInput.trim())
+                                } else {
+                                    viewModel.createNote(NoteType.TODO) { newId ->
+                                        viewModel.addTodo(newId, quickTaskInput.trim())
+                                    }
+                                }
+                                quickTaskInput = ""
+                                showCreateTaskSheet = false
+                            }
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = ThemeMainGold,
+                            contentColor = Color(0xFF2D261A)
+                        )
+                    ) {
+                        Text("Save", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -884,9 +887,6 @@ private fun TasksView(
     viewModel: NotesViewModel,
     reminderScheduler: ReminderScheduler,
     onOpenNote: (Long) -> Unit,
-    newQuickTaskText: String,
-    onNewQuickTaskTextChange: (String) -> Unit,
-    onAddQuickTask: () -> Unit,
 ) {
     var filter by remember { mutableStateOf(TodoFilter.ALL) }
     val allTodoItems = taskNotes.flatMap { todosByNote[it.id].orEmpty() }
@@ -895,40 +895,6 @@ private fun TasksView(
     var showCompleted by remember { mutableStateOf(true) }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        // Quick task input field
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-        ) {
-            OutlinedTextField(
-                value = newQuickTaskText,
-                onValueChange = onNewQuickTaskTextChange,
-                placeholder = { Text("Write a task…", fontSize = 14.sp) },
-                shape = RoundedCornerShape(22.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                modifier = Modifier.weight(1f).height(46.dp),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(
-                onClick = onAddQuickTask,
-                shape = CircleShape,
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                    containerColor = ThemeMainGold,
-                    contentColor = Color(0xFF2D261A)
-                ),
-                modifier = Modifier.size(46.dp),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                SymbolIcon(Symbols.ADD, size = 24.sp, color = Color(0xFF2D261A))
-            }
-        }
-
         if (allTodoItems.isEmpty() && taskNotes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -940,7 +906,7 @@ private fun TasksView(
                         modifier = Modifier.padding(top = 12.dp)
                     )
                     Text(
-                        "Type a task above or tap + to start a checklist.",
+                        "Tap + below to create a task or checklist.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.padding(top = 4.dp)
