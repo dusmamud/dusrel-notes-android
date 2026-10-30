@@ -156,6 +156,7 @@ fun NotesListScreen(
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
     var isSearchExpanded by remember { mutableStateOf(false) }
+    var showSortDialog by remember { mutableStateOf(false) }
     var actionNoteSheet by remember { mutableStateOf<Note?>(null) }
     var moveFolderNote by remember { mutableStateOf<Note?>(null) }
     var confirmDeleteNote by remember { mutableStateOf<Note?>(null) }
