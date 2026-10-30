@@ -724,107 +724,7 @@ fun EditorScreen(
                 }
             }
 
-            // Horizontally Scrollable Rich Text Formatting Drawer (RichTextIconHorizontalView.java Parity)
-            AnimatedVisibility(
-                visible = showRichTextDrawer,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Surface(
-                    color = cardTheme.containerColor,
-                    border = BorderStroke(0.5.dp, cardTheme.borderColor.copy(alpha = 0.3f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Bold
-                        IconButton(onClick = {
-                            doc?.let { d ->
-                                doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.BOLD)
-                                persist()
-                            }
-                        }) {
-                            SymbolIcon(Symbols.FORMAT_BOLD, size = 20.sp, color = cardTheme.onContainerColor)
-                        }
-                        // Italic
-                        IconButton(onClick = {
-                            doc?.let { d ->
-                                doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.ITALIC)
-                                persist()
-                            }
-                        }) {
-                            SymbolIcon(Symbols.FORMAT_ITALIC, size = 20.sp, color = cardTheme.onContainerColor)
-                        }
-                        // Underline
-                        IconButton(onClick = {
-                            doc?.let { d ->
-                                doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.UNDERLINE)
-                                persist()
-                            }
-                        }) {
-                            SymbolIcon(Symbols.FORMAT_UNDERLINED, size = 20.sp, color = cardTheme.onContainerColor)
-                        }
-                        // Bullet List
-                        IconButton(onClick = {
-                            doc?.let { d ->
-                                doc = toggleParagraph(d, 0, ParagraphType.BULLET)
-                                persist()
-                            }
-                        }) {
-                            SymbolIcon(Symbols.FORMAT_LIST_BULLETED, size = 20.sp, color = cardTheme.onContainerColor)
-                        }
-                        // Numbered List
-                        IconButton(onClick = {
-                            doc?.let { d ->
-                                doc = toggleParagraph(d, 0, ParagraphType.NUMBERED)
-                                persist()
-                            }
-                        }) {
-                            SymbolIcon(Symbols.FORMAT_LIST_NUMBERED, size = 20.sp, color = cardTheme.onContainerColor)
-                        }
-                        // Heading H1
-                        TextButton(onClick = {
-                            doc?.let { d ->
-                                doc = toggleParagraph(d, 0, ParagraphType.HEADING)
-                                persist()
-                            }
-                        }) {
-                            Text("H1", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = cardTheme.onContainerColor)
-                        }
-                        // Heading H2
-                        TextButton(onClick = {
-                            doc?.let { d ->
-                                doc = toggleParagraph(d, 0, ParagraphType.HEADING)
-                                persist()
-                            }
-                        }) {
-                            Text("H2", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = cardTheme.onContainerColor)
-                        }
-                        // Font Size A+
-                        TextButton(onClick = {
-                            val newText = (doc?.text ?: "") + "\n"
-                            doc = (doc ?: RichDocument("")).copy(text = newText)
-                            persist()
-                        }) {
-                            Text("A+", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cardTheme.onContainerColor)
-                        }
-                        // Font Size A-
-                        TextButton(onClick = {
-                            // Subtle size hint
-                        }) {
-                            Text("A-", fontWeight = FontWeight.Normal, fontSize = 12.sp, color = cardTheme.onContainerColor)
-                        }
-                    }
-                }
-            }
-
-            // Docked Full-Width Bottom Toolbar (small_screen_mode_tool_group.xml Parity)
+            // Docked Full-Width Bottom Toolbar (small_screen_mode_tool_group.xml & SmallScreenNoteEditToolbarController Parity)
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -840,81 +740,255 @@ fun EditorScreen(
                         .height(52.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Left 81% Section (AI, Voice, Gallery, Doodle, Checklist)
-                    Row(
-                        modifier = Modifier.weight(0.81f),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                    // Left 81% Section (Dual-state: Normal Tools vs 18 Rich Text Formatting Tools in the SAME 52dp row)
+                    Box(
+                        modifier = Modifier
+                            .weight(0.81f)
+                            .fillMaxHeight(),
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        // AI Assistant (@id/ai)
-                        IconButton(onClick = { showAiSheet = true }) {
-                            SymbolIcon(
-                                Symbols.STAR,
-                                size = 22.sp,
-                                color = ThemeMainGold,
-                                filled = true
-                            )
-                        }
-                        // Voice Note Recorder (@id/audio)
-                        IconButton(onClick = { isRecordingAudio = !isRecordingAudio }) {
-                            SymbolIcon(
-                                Symbols.MIC,
-                                size = 22.sp,
-                                color = if (isRecordingAudio) MaterialTheme.colorScheme.error else cardTheme.onContainerColor
-                            )
-                        }
-                        // Gallery Photo Picker (@id/gallery)
-                        IconButton(onClick = { galleryLauncher.launch("image/*") }) {
-                            SymbolIcon(
-                                Symbols.IMAGE,
-                                size = 22.sp,
-                                color = cardTheme.onContainerColor
-                            )
-                        }
-                        // Doodle Drawing Canvas (@id/edit_image)
-                        IconButton(onClick = {
-                            val newType = if (n.type == NoteType.DOODLE) NoteType.NOTE else NoteType.DOODLE
-                            note = n.copy(type = newType)
-                            viewModel.updateNote(n.copy(type = newType))
-                        }) {
-                            SymbolIcon(
-                                Symbols.DRAW,
-                                size = 22.sp,
-                                color = if (n.type == NoteType.DOODLE) ThemeMainGold else cardTheme.onContainerColor,
-                                filled = n.type == NoteType.DOODLE
-                            )
-                        }
-                        // Checklist Toggle (@id/check)
-                        IconButton(onClick = {
-                            val newType = if (n.type == NoteType.TODO) NoteType.NOTE else NoteType.TODO
-                            note = n.copy(type = newType)
-                            viewModel.updateNote(n.copy(type = newType))
-                        }) {
-                            SymbolIcon(
-                                Symbols.CHECKLIST,
-                                size = 22.sp,
-                                color = if (n.type == NoteType.TODO) ThemeMainGold else cardTheme.onContainerColor,
-                                filled = n.type == NoteType.TODO
-                            )
+                        if (!showRichTextDrawer) {
+                            // State 1: 5 Main Edit Tools (@id/toolbar: AI, Voice, Gallery, Doodle, Checklist)
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // AI Assistant (@id/ai)
+                                IconButton(onClick = { showAiSheet = true }) {
+                                    SymbolIcon(
+                                        Symbols.STAR,
+                                        size = 22.sp,
+                                        color = ThemeMainGold,
+                                        filled = true
+                                    )
+                                }
+                                // Voice Note Recorder (@id/audio)
+                                IconButton(onClick = { isRecordingAudio = !isRecordingAudio }) {
+                                    SymbolIcon(
+                                        Symbols.MIC,
+                                        size = 22.sp,
+                                        color = if (isRecordingAudio) MaterialTheme.colorScheme.error else cardTheme.onContainerColor
+                                    )
+                                }
+                                // Gallery Photo Picker (@id/gallery)
+                                IconButton(onClick = { galleryLauncher.launch("image/*") }) {
+                                    SymbolIcon(
+                                        Symbols.IMAGE,
+                                        size = 22.sp,
+                                        color = cardTheme.onContainerColor
+                                    )
+                                }
+                                // Doodle Drawing Canvas (@id/edit_image)
+                                IconButton(onClick = {
+                                    val newType = if (n.type == NoteType.DOODLE) NoteType.NOTE else NoteType.DOODLE
+                                    note = n.copy(type = newType)
+                                    viewModel.updateNote(n.copy(type = newType))
+                                }) {
+                                    SymbolIcon(
+                                        Symbols.DRAW,
+                                        size = 22.sp,
+                                        color = if (n.type == NoteType.DOODLE) ThemeMainGold else cardTheme.onContainerColor,
+                                        filled = n.type == NoteType.DOODLE
+                                    )
+                                }
+                                // Checklist Toggle (@id/check)
+                                IconButton(onClick = {
+                                    val newType = if (n.type == NoteType.TODO) NoteType.NOTE else NoteType.TODO
+                                    note = n.copy(type = newType)
+                                    viewModel.updateNote(n.copy(type = newType))
+                                }) {
+                                    SymbolIcon(
+                                        Symbols.CHECKLIST,
+                                        size = 22.sp,
+                                        color = if (n.type == NoteType.TODO) ThemeMainGold else cardTheme.onContainerColor,
+                                        filled = n.type == NoteType.TODO
+                                    )
+                                }
+                            }
+                        } else {
+                            // State 2: Horizontally Scrollable 18 Formatting Tools (expand_icon_group.xml Parity)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 1. Heading 1 (@id/first_level)
+                                TextButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleParagraph(d, 0, ParagraphType.HEADING)
+                                        persist()
+                                    }
+                                }) {
+                                    Text("H1", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 2. Heading 2 (@id/second_level)
+                                TextButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleParagraph(d, 0, ParagraphType.HEADING)
+                                        persist()
+                                    }
+                                }) {
+                                    Text("H2", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 3. Heading 3 (@id/thrid_level)
+                                TextButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleParagraph(d, 0, ParagraphType.HEADING)
+                                        persist()
+                                    }
+                                }) {
+                                    Text("H3", fontWeight = FontWeight.Medium, fontSize = 12.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 4. Font Size A+ (@id/increase_font)
+                                TextButton(onClick = {
+                                    val newText = (doc?.text ?: "") + " "
+                                    doc = (doc ?: RichDocument("")).copy(text = newText)
+                                    persist()
+                                }) {
+                                    Text("A+", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 5. Font Size A- (@id/reduce_font)
+                                TextButton(onClick = { }) {
+                                    Text("A-", fontWeight = FontWeight.Normal, fontSize = 12.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 6. Bold (@id/bold)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.BOLD)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.FORMAT_BOLD, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 7. Italic (@id/italic)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.ITALIC)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.FORMAT_ITALIC, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 8. Underline (@id/underline)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.UNDERLINE)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.FORMAT_UNDERLINED, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 9. Strikethrough (@id/strikethrough)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.STRIKETHROUGH)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.FORMAT_STRIKETHROUGH, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 10. Background Highlight (@id/bg_highlight)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.HIGHLIGHT)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.BRUSH, size = 19.sp, color = ThemeMainGold)
+                                }
+                                // 11. Bullet List (@id/bullet)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleParagraph(d, 0, ParagraphType.BULLET)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.FORMAT_LIST_BULLETED, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 12. Numbered List (@id/listbullet)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleParagraph(d, 0, ParagraphType.NUMBERED)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.FORMAT_LIST_NUMBERED, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 13. Divider Line (@id/split_line)
+                                IconButton(onClick = {
+                                    val divider = "
+──────────
+"
+                                    doc = (doc ?: RichDocument("")).let { it.copy(text = it.text + divider) }
+                                    persist()
+                                }) {
+                                    SymbolIcon(Symbols.REMOVE, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 14. Blockquote (@id/quote)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleParagraph(d, 0, ParagraphType.QUOTE)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.FORMAT_QUOTE, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 15. Align Center (@id/center)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleParagraph(d, 0, ParagraphType.CENTER)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.FORMAT_ALIGN_CENTER, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 16. Align Right (@id/right)
+                                IconButton(onClick = {
+                                    doc?.let { d ->
+                                        doc = toggleParagraph(d, 0, ParagraphType.RIGHT)
+                                        persist()
+                                    }
+                                }) {
+                                    SymbolIcon(Symbols.FORMAT_ALIGN_RIGHT, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 17. Indent Right (@id/indentright)
+                                IconButton(onClick = {
+                                    val indented = "    "
+                                    doc = (doc ?: RichDocument("")).let { it.copy(text = it.text + indented) }
+                                    persist()
+                                }) {
+                                    SymbolIcon(Symbols.ARROW_FORWARD, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                                // 18. Indent Left (@id/indentleft)
+                                IconButton(onClick = { }) {
+                                    SymbolIcon(Symbols.ARROW_BACK, size = 19.sp, color = cardTheme.onContainerColor)
+                                }
+                            }
                         }
                     }
 
-                    // Vertical Divider Line (rich_text_divide)
+                    // Vertical Divider Line (@id/rich_text_divide)
                     Box(
                         modifier = Modifier
                             .width(0.75.dp)
-                            .height(24.dp)
-                            .background(cardTheme.borderColor.copy(alpha = 0.5f))
+                            .height(26.dp)
+                            .background(if (showRichTextDrawer) ThemeMainGold else cardTheme.borderColor.copy(alpha = 0.5f))
                     )
 
-                    // Right 19% Section (rich_text_switch)
+                    // Right 19% Section (@id/rich_text_switch: Toggles between Main Tools & Rich Text Toolbar in same bar)
                     Box(
-                        modifier = Modifier.weight(0.19f),
+                        modifier = Modifier
+                            .weight(0.19f)
+                            .fillMaxHeight(),
                         contentAlignment = Alignment.Center
                     ) {
                         IconButton(onClick = { showRichTextDrawer = !showRichTextDrawer }) {
                             SymbolIcon(
-                                Symbols.TITLE,
+                                codePoint = if (showRichTextDrawer) Symbols.CLOSE else Symbols.TITLE,
                                 size = 22.sp,
                                 color = if (showRichTextDrawer) ThemeMainGold else cardTheme.onContainerColor
                             )
@@ -925,7 +999,7 @@ fun EditorScreen(
         }
     }
 
-    // AI Writing Assistant Bottom Sheet (AiFloatingWindow Parity)
+        // AI Writing Assistant Bottom Sheet (AiFloatingWindow Parity)
     if (showAiSheet) {
         ModalBottomSheet(
             onDismissRequest = { showAiSheet = false },

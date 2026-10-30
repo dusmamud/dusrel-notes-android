@@ -29,7 +29,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dusrel.notes.data.local.ThemeSetting
-import com.dusrel.notes.presentation.viewmodel.NotesViewModel
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import com.dusrel.notes.presentation.theme.ThemeMainGold
 import kotlinx.coroutines.launch
 
 @Composable
@@ -39,6 +43,8 @@ fun SettingsScreen(viewModel: NotesViewModel, onOpenAbout: () -> Unit, onOpenPri
     val locale = LocalConfiguration.current.locales[0]
     val scope = rememberCoroutineScope()
     val theme by viewModel.theme.collectAsState()
+    val isGrid by viewModel.isGridView.collectAsState()
+    val isTaskToolboxEnabled by viewModel.isTaskToolboxEnabled.collectAsState()
     var message by remember { mutableStateOf("") }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -61,8 +67,46 @@ fun SettingsScreen(viewModel: NotesViewModel, onOpenAbout: () -> Unit, onOpenPri
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
         Text("Settings", style = MaterialTheme.typography.headlineMedium)
+
+        // View Mode (phone_app_preferences.xml parity)
+        Text("View mode", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            RadioButton(selected = !isGrid, onClick = { viewModel.setGridView(false) })
+            Text("List view (Single column)")
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            RadioButton(selected = isGrid, onClick = { viewModel.setGridView(true) })
+            Text("Grid view (Two columns)")
+        }
+
+        // Quick Functions & Task Toolbox (pref_title_todo_float_mode parity)
+        Text("Quick functions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Use task toolbox", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Swipe from screen edge to quickly view or create tasks and notes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isTaskToolboxEnabled,
+                onCheckedChange = { viewModel.setTaskToolboxEnabled(it) },
+                colors = SwitchDefaults.colors(checkedThumbColor = ThemeMainGold, checkedTrackColor = ThemeMainGold.copy(alpha = 0.5f))
+            )
+        }
+
         Text("Appearance", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp))
         listOf(ThemeSetting.LIGHT to "Light", ThemeSetting.DARK to "Dark", ThemeSetting.SYSTEM to "System default").forEach { (value, label) ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {

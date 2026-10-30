@@ -20,6 +20,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -144,6 +148,10 @@ fun NotesListScreen(
     val folderFilter by viewModel.folderFilterId.collectAsState()
     val todosByNote by viewModel.todosByNote.collectAsState()
     val isGrid by viewModel.isGridView.collectAsState()
+    val isTaskToolboxEnabled by viewModel.isTaskToolboxEnabled.collectAsState()
+    var isTaskToolboxOpen by remember { mutableStateOf(false) }
+    var toolboxQuickTaskText by remember { mutableStateOf("") }
+    var toolboxQuickNoteText by remember { mutableStateOf("") }
     val isDark = isSystemInDarkTheme()
     val locale = LocalConfiguration.current.locales[0]
     val context = LocalContext.current
@@ -597,6 +605,198 @@ fun NotesListScreen(
                 }
             }
 
+        }
+
+        // Task Toolbox Floating Edge Indicator Handle (pref_title_todo_float_mode Parity)
+        if (isTaskToolboxEnabled && !isTaskToolboxOpen) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .offset(x = (-2).dp)
+                    .width(5.dp)
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(topStart = 3.dp, bottomStart = 3.dp))
+                    .background(ThemeMainGold.copy(alpha = 0.7f))
+                    .clickable { isTaskToolboxOpen = true }
+            )
+        }
+
+        // Task Toolbox Sliding Drawer Overlay (todo_float_full_view.xml & FloatFullWindow Parity)
+        AnimatedVisibility(
+            visible = isTaskToolboxOpen,
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable { isTaskToolboxOpen = false }
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(320.dp)
+                        .align(Alignment.CenterEnd)
+                        .clickable(enabled = false) { /* consume clicks */ },
+                    shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 16.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                            .padding(20.dp)
+                    ) {
+                        // Header: Title + Close
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                SymbolIcon(Symbols.CHECKLIST, size = 22.sp, color = ThemeMainGold)
+                                Text(
+                                    " Task Toolbox",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(start = 6.dp)
+                                )
+                            }
+                            IconButton(onClick = { isTaskToolboxOpen = false }) {
+                                SymbolIcon(Symbols.CLOSE, size = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        // Inline Quick Task Input
+                        OutlinedTextField(
+                            value = toolboxQuickTaskText,
+                            onValueChange = { toolboxQuickTaskText = it },
+                            placeholder = { Text("Add a task…", fontSize = 13.sp) },
+                            singleLine = true,
+                            trailingIcon = {
+                                if (toolboxQuickTaskText.isNotBlank()) {
+                                    IconButton(onClick = {
+                                        viewModel.quickCreateTodo(toolboxQuickTaskText)
+                                        toolboxQuickTaskText = ""
+                                    }) {
+                                        SymbolIcon(Symbols.CHECK, size = 18.sp, color = ThemeMainGold)
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp)
+                        )
+
+                        // Active Tasks Checklist
+                        val taskNotes = notes.filter { it.type == NoteType.TODO }
+                        val activeTodos = taskNotes.flatMap { todosByNote[it.id].orEmpty() }.filter { !it.done }
+
+                        Text(
+                            text = "Pending Tasks (${activeTodos.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+
+                        if (activeTodos.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "No pending tasks",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(activeTodos, key = { it.id }) { item ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 3.dp)
+                                    ) {
+                                        TaskSquircleCheckbox(
+                                            checked = item.done,
+                                            onCheckedChange = { viewModel.toggleTodo(item) }
+                                        )
+                                        Text(
+                                            text = item.text,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(start = 10.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Quick Note Creator at Bottom of Toolbox
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                        Text(
+                            text = "Quick Note",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        OutlinedTextField(
+                            value = toolboxQuickNoteText,
+                            onValueChange = { toolboxQuickNoteText = it },
+                            placeholder = { Text("Jot down a quick thought…", fontSize = 13.sp) },
+                            singleLine = true,
+                            trailingIcon = {
+                                if (toolboxQuickNoteText.isNotBlank()) {
+                                    IconButton(onClick = {
+                                        viewModel.quickCreateNote(toolboxQuickNoteText) { id ->
+                                            isTaskToolboxOpen = false
+                                            onOpenNote(id)
+                                        }
+                                        toolboxQuickNoteText = ""
+                                    }) {
+                                        SymbolIcon(Symbols.ARROW_FORWARD, size = 18.sp, color = ThemeMainGold)
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
         }
 
         // Single Primary Floating Action Button (FAB) matching modern phone architecture

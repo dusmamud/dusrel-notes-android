@@ -45,6 +45,8 @@ class NotesViewModel(
     val guideDone: StateFlow<Boolean> = preferences.guideDone
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val isGridView: StateFlow<Boolean> = preferences.isGridView
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isTaskToolboxEnabled: StateFlow<Boolean> = preferences.isTaskToolboxEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val query = MutableStateFlow("")
@@ -239,6 +241,33 @@ class NotesViewModel(
     }
     fun setGridView(isGrid: Boolean) {
         viewModelScope.launch { preferences.setGridView(isGrid) }
+    }
+    fun toggleTaskToolbox() {
+        viewModelScope.launch { preferences.setTaskToolboxEnabled(!isTaskToolboxEnabled.value) }
+    }
+    fun setTaskToolboxEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.setTaskToolboxEnabled(enabled) }
+    }
+    fun quickCreateTodo(text: String) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            val taskNotes = repository.observeNotes().first().filter { it.type == NoteType.TODO }
+            val targetNote = taskNotes.firstOrNull() ?: run {
+                val newId = repository.upsertNote(Note(title = "Tasks", content = "", type = NoteType.TODO))
+                repository.observeNotes().first().first { it.id == newId }
+            }
+            repository.upsertTodo(TodoItem(noteId = targetNote.id, text = text.trim()))
+        }
+    }
+    fun quickCreateNote(text: String, onDone: ((Long) -> Unit)? = null) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            val lines = text.trim().lines()
+            val title = lines.firstOrNull().orEmpty().take(40)
+            val content = if (lines.size > 1) lines.drop(1).joinToString("\n") else ""
+            val newId = repository.upsertNote(Note(title = title, content = content, type = NoteType.NOTE))
+            onDone?.invoke(newId)
+        }
     }
     fun updateNoteColor(note: Note, colorId: Int) = updateNote(note.copy(color = colorId))
 
