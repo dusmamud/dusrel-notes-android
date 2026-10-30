@@ -21,9 +21,15 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -195,7 +201,16 @@ fun NotesListScreen(
         label = "titleCollapse"
     )
 
-    // Pull-down overscroll gesture for search capsule and private vault
+    val pagerSpringSpec = spring<Float>(
+        dampingRatio = 0.95f,
+        stiffness = Spring.StiffnessMediumLow
+    )
+    val pagerFlingBehavior = PagerDefaults.flingBehavior(
+        state = pagerState,
+        snapAnimationSpec = pagerSpringSpec
+    )
+
+    // Pull-down overscroll gesture for search capsule and private vault (miuix_sbl_simple_indicator Parity)
     var overscrollPullDistance by remember { mutableStateOf(0f) }
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -213,18 +228,24 @@ fun NotesListScreen(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                if (available.y > 0) {
+                if (available.y > 0 && pagerState.currentPage == 0 && !isScrolledDown) {
                     overscrollPullDistance += available.y * 0.45f
-                    if (overscrollPullDistance > 140f && !isSearchExpanded) {
+                    if (overscrollPullDistance > 130f && !isSearchExpanded) {
                         isSearchExpanded = true
-                    }
-                    if (overscrollPullDistance > 350f && pagerState.currentPage == 0) {
-                        onOpenPrivate()
-                        overscrollPullDistance = 0f
                     }
                     return Offset(0f, available.y)
                 }
                 return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pagerState.currentPage == 0 && overscrollPullDistance >= 150f) {
+                    overscrollPullDistance = 0f
+                    onOpenPrivate()
+                    return available
+                }
+                overscrollPullDistance = 0f
+                return Velocity.Zero
             }
         }
     }
@@ -239,7 +260,11 @@ fun NotesListScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+        ) {
             // Fixed 56dp Action Bar Header (with Center Collapsed Title & Top-Right Icons)
             Surface(
                 modifier = Modifier
@@ -431,9 +456,10 @@ fun NotesListScreen(
                 }
             }
 
-            // Main Sliding ViewPager Content (2-Page HorizontalPager)
+            // Main Sliding ViewPager Content (2-Page HorizontalPager with PhysicBasedInterpolator Spring Fling)
             HorizontalPager(
                 state = pagerState,
+                flingBehavior = pagerFlingBehavior,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -442,6 +468,35 @@ fun NotesListScreen(
                 if (page == 0) {
                     // Notes View
                     val filteredNotes = notes.filter { it.type != NoteType.TODO }
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Lock Indicator for Pull-Down Private Vault (miuix_sbl_simple_indicator Parity)
+                        AnimatedVisibility(
+                            visible = overscrollPullDistance > 12f,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            val isActivated = overscrollPullDistance >= 150f
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                SymbolIcon(
+                                    codePoint = if (isActivated) Symbols.LOCK_OPEN else Symbols.LOCK,
+                                    size = 24.sp,
+                                    color = if (isActivated) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = if (isActivated) "Release to open private folder" else "Pull down to open private folder",
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isActivated) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isActivated) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
                     if (filteredNotes.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -503,6 +558,7 @@ fun NotesListScreen(
                             }
                         }
                     }
+                    }
                 } else {
                     // Tasks / Todo View
                     val taskNotes = notes.filter { it.type == NoteType.TODO }
@@ -521,15 +577,16 @@ fun NotesListScreen(
 
             // Bottom Navigation Bar (Persistent 60dp matching bottom_nav_menu.xml)
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp),
+                modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
                 shadowElevation = 4.dp
             ) {
                 Row(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .height(60.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val isNotesActive = pagerState.currentPage == 0
@@ -602,6 +659,7 @@ fun NotesListScreen(
             exit = scaleOut() + fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
                 .padding(end = 22.dp, bottom = 78.dp)
         ) {
             FloatingActionButton(
