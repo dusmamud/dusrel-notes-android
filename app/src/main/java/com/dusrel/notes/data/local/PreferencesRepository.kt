@@ -34,7 +34,7 @@ class PreferencesRepository(private val context: Context) {
         runCatching { ThemeSetting.valueOf(prefs[themeKey] ?: "SYSTEM") }.getOrDefault(ThemeSetting.SYSTEM)
     }
     val guideDone: Flow<Boolean> = context.notesDataStore.data.map { it[guideDoneKey] == true }
-    val isGridView: Flow<Boolean> = context.notesDataStore.data.map { it[isGridViewKey] ?: true }
+    val isGridView: Flow<Boolean> = context.notesDataStore.data.map { it[isGridViewKey] ?: false }
 
     suspend fun setTheme(theme: ThemeSetting) {
         context.notesDataStore.edit { it[themeKey] = theme.name }
