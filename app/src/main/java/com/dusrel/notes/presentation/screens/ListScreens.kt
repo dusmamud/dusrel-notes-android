@@ -91,6 +91,10 @@ import com.dusrel.notes.domain.reminder.ReminderScheduler
 import com.dusrel.notes.domain.search.searchNotes
 import com.dusrel.notes.presentation.components.SymbolIcon
 import com.dusrel.notes.presentation.components.Symbols
+import com.dusrel.notes.presentation.theme.CardBgDark
+import com.dusrel.notes.presentation.theme.CardBgLight
+import com.dusrel.notes.presentation.theme.ThemeMainGold
+import com.dusrel.notes.presentation.theme.TodoCheckboxOutline
 import com.dusrel.notes.presentation.theme.getNoteCardTheme
 import com.dusrel.notes.presentation.viewmodel.ListTab
 import com.dusrel.notes.presentation.viewmodel.NotesViewModel
@@ -171,19 +175,19 @@ fun NotesListScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Notes",
-                            fontSize = if (selectedTopTab == HomeTopTab.NOTES) 26.sp else 20.sp,
+                            fontSize = if (selectedTopTab == HomeTopTab.NOTES) 28.sp else 20.sp,
                             fontWeight = if (selectedTopTab == HomeTopTab.NOTES) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedTopTab == HomeTopTab.NOTES) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                            color = if (selectedTopTab == HomeTopTab.NOTES) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.38f),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable { selectedTopTab = HomeTopTab.NOTES }
-                                .padding(end = 14.dp, top = 4.dp, bottom = 4.dp)
+                                .padding(end = 16.dp, top = 4.dp, bottom = 4.dp)
                         )
                         Text(
                             text = "Tasks",
-                            fontSize = if (selectedTopTab == HomeTopTab.TASKS) 26.sp else 20.sp,
+                            fontSize = if (selectedTopTab == HomeTopTab.TASKS) 28.sp else 20.sp,
                             fontWeight = if (selectedTopTab == HomeTopTab.TASKS) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedTopTab == HomeTopTab.TASKS) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                            color = if (selectedTopTab == HomeTopTab.TASKS) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.38f),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable { selectedTopTab = HomeTopTab.TASKS }
@@ -204,6 +208,9 @@ fun NotesListScreen(
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
                             }
+                            IconButton(onClick = onOpenFolders) {
+                                SymbolIcon(Symbols.FOLDER, size = 22.sp, color = MaterialTheme.colorScheme.onBackground)
+                            }
                         }
                         Box {
                             IconButton(onClick = { showOverflowMenu = true }) {
@@ -217,11 +224,6 @@ fun NotesListScreen(
                                     text = { Text("Sort notes") },
                                     leadingIcon = { SymbolIcon(Symbols.SORT, size = 18.sp) },
                                     onClick = { showOverflowMenu = false; showSortDialog = true }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Folders") },
-                                    leadingIcon = { SymbolIcon(Symbols.FOLDER, size = 18.sp) },
-                                    onClick = { showOverflowMenu = false; onOpenFolders() }
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Private Vault") },
@@ -266,8 +268,14 @@ fun NotesListScreen(
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(24.dp),
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
                             singleLine = true
                         )
                     }
@@ -278,30 +286,30 @@ fun NotesListScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp)
+                            .padding(top = 10.dp)
                             .horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val isAllSelected = folderFilter == null
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = if (isAllSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isAllSelected) ThemeMainGold else MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.clickable { viewModel.folderFilterId.value = null }
                         ) {
                             Text(
                                 "All (${allNotes.size})",
                                 fontSize = 12.sp,
-                                fontWeight = if (isAllSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isAllSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isAllSelected) Color(0xFF2D261A) else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
                         folders.forEach { folder ->
                             val isSelected = folderFilter == folder.id
                             Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isSelected) ThemeMainGold else MaterialTheme.colorScheme.surfaceVariant,
                                 modifier = Modifier.clickable {
                                     viewModel.folderFilterId.value = if (isSelected) null else folder.id
                                 }
@@ -309,8 +317,8 @@ fun NotesListScreen(
                                 Text(
                                     folder.name,
                                     fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) Color(0xFF2D261A) else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
                             }
@@ -435,21 +443,21 @@ fun NotesListScreen(
         Row(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 18.dp, bottom = 24.dp),
+                .padding(end = 22.dp, bottom = 28.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Companion Secondary FAB (Doodle / Sketch)
             if (selectedTopTab == HomeTopTab.NOTES) {
                 FloatingActionButton(
                     onClick = { viewModel.createNote(NoteType.DOODLE, onOpenNote) },
                     shape = CircleShape,
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    containerColor = if (isDark) CardBgDark else CardBgLight,
+                    contentColor = ThemeMainGold,
                     elevation = FloatingActionButtonDefaults.elevation(3.dp),
-                    modifier = Modifier.size(46.dp)
+                    modifier = Modifier.size(52.dp)
                 ) {
-                    SymbolIcon(Symbols.DRAW, size = 20.sp)
+                    SymbolIcon(Symbols.DRAW, size = 22.sp, color = ThemeMainGold)
                 }
             }
 
@@ -463,12 +471,12 @@ fun NotesListScreen(
                     }
                 },
                 shape = CircleShape,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
-                elevation = FloatingActionButtonDefaults.elevation(5.dp),
+                containerColor = ThemeMainGold,
+                contentColor = Color(0xFF2D261A),
+                elevation = FloatingActionButtonDefaults.elevation(4.dp),
                 modifier = Modifier.size(58.dp)
             ) {
-                SymbolIcon(Symbols.ADD, size = 28.sp, color = Color.White)
+                SymbolIcon(Symbols.ADD, size = 30.sp, color = Color(0xFF2D261A))
             }
         }
     }
@@ -662,7 +670,7 @@ private fun NoteCard(
                     SymbolIcon(
                         Symbols.PUSH_PIN,
                         size = 15.sp,
-                        color = Color(0xFFE5A93C),
+                        color = ThemeMainGold,
                         filled = true,
                         modifier = Modifier.padding(start = 4.dp)
                     )
@@ -694,13 +702,23 @@ private fun NoteCard(
             if (note.type == NoteType.TODO && todos.isNotEmpty()) {
                 Column(modifier = Modifier.padding(top = 6.dp)) {
                     todos.take(if (isGrid) 3 else 4).forEach { todo ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 1.dp)) {
-                            SymbolIcon(
-                                if (todo.done) Symbols.CHECK_CIRCLE else Symbols.CHECK,
-                                size = 13.sp,
-                                color = if (todo.done) cardTheme.secondaryTextColor.copy(alpha = 0.5f) else cardTheme.secondaryTextColor,
-                                filled = todo.done
-                            )
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 1.5.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (todo.done) ThemeMainGold else Color.Transparent)
+                                    .border(
+                                        width = if (todo.done) 0.dp else 1.5.dp,
+                                        color = if (todo.done) Color.Transparent else TodoCheckboxOutline,
+                                        shape = RoundedCornerShape(4.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (todo.done) {
+                                    SymbolIcon(Symbols.CHECK, size = 10.sp, color = Color(0xFF2D261A))
+                                }
+                            }
                             Text(
                                 text = todo.text,
                                 style = MaterialTheme.typography.bodySmall.copy(
@@ -710,7 +728,7 @@ private fun NoteCard(
                                 color = if (todo.done) cardTheme.secondaryTextColor.copy(alpha = 0.5f) else cardTheme.onContainerColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(start = 4.dp)
+                                modifier = Modifier.padding(start = 6.dp)
                             )
                         }
                     }
@@ -725,7 +743,7 @@ private fun NoteCard(
                 }
             }
 
-            // Bottom Metadata Line: Date/Time + Folder
+            // Bottom Metadata Line: Date/Time + Indicators
             val dateText = java.text.SimpleDateFormat("dd MMM", locale).format(java.util.Date(note.updatedAt))
             val meta = if (note.type == NoteType.TODO) listMetaLine(dateText, todoProgressLabel(todos)) else dateText
             Row(
@@ -738,15 +756,23 @@ private fun NoteCard(
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                     color = cardTheme.secondaryTextColor.copy(alpha = 0.75f)
                 )
-                if (!folderName.isNullOrBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SymbolIcon(Symbols.FOLDER, size = 12.sp, color = cardTheme.secondaryTextColor.copy(alpha = 0.75f))
-                        Text(
-                            text = folderName,
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = cardTheme.secondaryTextColor.copy(alpha = 0.75f),
-                            modifier = Modifier.padding(start = 2.dp)
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (note.type == NoteType.DOODLE) {
+                        SymbolIcon(Symbols.DRAW, size = 13.sp, color = cardTheme.secondaryTextColor.copy(alpha = 0.75f))
+                    }
+                    if (note.reminderTime != null) {
+                        SymbolIcon(Symbols.ALARM, size = 13.sp, color = ThemeMainGold)
+                    }
+                    if (!folderName.isNullOrBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SymbolIcon(Symbols.FOLDER, size = 12.sp, color = cardTheme.secondaryTextColor.copy(alpha = 0.75f))
+                            Text(
+                                text = folderName,
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = cardTheme.secondaryTextColor.copy(alpha = 0.75f),
+                                modifier = Modifier.padding(start = 2.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -786,18 +812,28 @@ private fun TasksView(
                 value = newQuickTaskText,
                 onValueChange = onNewQuickTaskTextChange,
                 placeholder = { Text("Write a task…", fontSize = 14.sp) },
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.weight(1f).height(50.dp),
+                shape = RoundedCornerShape(22.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                modifier = Modifier.weight(1f).height(46.dp),
                 singleLine = true
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = onAddQuickTask,
                 shape = CircleShape,
-                modifier = Modifier.size(50.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = ThemeMainGold,
+                    contentColor = Color(0xFF2D261A)
+                ),
+                modifier = Modifier.size(46.dp),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                SymbolIcon(Symbols.ADD, size = 22.sp, color = Color.White)
+                SymbolIcon(Symbols.ADD, size = 24.sp, color = Color(0xFF2D261A))
             }
         }
 
@@ -865,25 +901,54 @@ private fun TasksView(
 }
 
 @Composable
+fun TaskSquircleCheckbox(
+    checked: Boolean,
+    onCheckedChange: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(20.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (checked) ThemeMainGold else Color.Transparent)
+            .border(
+                width = if (checked) 0.dp else 2.dp,
+                color = if (checked) Color.Transparent else TodoCheckboxOutline,
+                shape = RoundedCornerShape(6.dp)
+            )
+            .clickable(onClick = onCheckedChange),
+        contentAlignment = Alignment.Center
+    ) {
+        if (checked) {
+            SymbolIcon(
+                Symbols.CHECK,
+                size = 14.sp,
+                color = Color(0xFF2D261A),
+            )
+        }
+    }
+}
+
+@Composable
 private fun TaskItemRow(
     item: TodoItem,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val isDark = isSystemInDarkTheme()
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+        border = BorderStroke(1.dp, if (isDark) CardBgDark else Color(0xFFEAEAEA)),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            Checkbox(
+            TaskSquircleCheckbox(
                 checked = item.done,
-                onCheckedChange = { onToggle() },
-                modifier = Modifier.size(24.dp)
+                onCheckedChange = onToggle,
             )
             Text(
                 text = item.text,
@@ -892,7 +957,7 @@ private fun TaskItemRow(
                     textDecoration = if (item.done) TextDecoration.LineThrough else TextDecoration.None
                 ),
                 color = if (item.done) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f) else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f).padding(start = 10.dp)
+                modifier = Modifier.weight(1f).padding(start = 12.dp)
             )
             IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
                 SymbolIcon(Symbols.CLOSE, size = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
@@ -911,10 +976,19 @@ fun FoldersScreen(viewModel: NotesViewModel, onOpenFolder: (Long) -> Unit) {
     var showCreate by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Button(onClick = { showCreate = true }, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-            SymbolIcon(Symbols.CREATE_NEW_FOLDER, size = 20.sp)
-            Text(" New folder", modifier = Modifier.padding(start = 4.dp))
+        Button(
+            onClick = { showCreate = true },
+            shape = RoundedCornerShape(14.dp),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = ThemeMainGold,
+                contentColor = Color(0xFF2D261A)
+            ),
+            modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 4.dp)
+        ) {
+            SymbolIcon(Symbols.CREATE_NEW_FOLDER, size = 20.sp, color = Color(0xFF2D261A))
+            Text(" New folder", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
         }
+        Spacer(modifier = Modifier.height(12.dp))
         if (folders.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -929,14 +1003,16 @@ fun FoldersScreen(viewModel: NotesViewModel, onOpenFolder: (Long) -> Unit) {
                     val count = visibleForFolders.count { it.folderId == folder.id && !it.trashed }
                     Card(
                         modifier = Modifier.fillMaxWidth().clickable { onOpenFolder(folder.id) },
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(16.dp)
                         ) {
-                            SymbolIcon(Symbols.FOLDER, size = 22.sp, color = MaterialTheme.colorScheme.primary)
-                            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                            SymbolIcon(Symbols.FOLDER, size = 24.sp, color = ThemeMainGold)
+                            Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
                                 Text(folder.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 Text("$count notes", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }

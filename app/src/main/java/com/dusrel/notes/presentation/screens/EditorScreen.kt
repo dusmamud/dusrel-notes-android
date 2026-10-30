@@ -78,6 +78,7 @@ import com.dusrel.notes.domain.reminder.ReminderScheduler
 import com.dusrel.notes.presentation.components.SymbolIcon
 import com.dusrel.notes.presentation.components.Symbols
 import com.dusrel.notes.presentation.theme.PoppinsFamily
+import com.dusrel.notes.presentation.theme.ThemeMainGold
 import com.dusrel.notes.presentation.theme.getNoteCardTheme
 import com.dusrel.notes.presentation.viewmodel.NotesViewModel
 import java.util.Calendar
@@ -100,6 +101,7 @@ fun EditorScreen(
     var reminderPathLabel by remember { mutableStateOf<String?>(null) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showColorPalette by remember { mutableStateOf(false) }
+    var showFormatToolbar by remember { mutableStateOf(false) }
 
     val reminderScheduler = remember {
         ReminderScheduler(
@@ -241,7 +243,33 @@ fun EditorScreen(
                                 Symbols.PUSH_PIN,
                                 size = 20.sp,
                                 filled = n.pinned,
-                                color = if (n.pinned) Color(0xFFE5A93C) else cardTheme.secondaryTextColor
+                                color = if (n.pinned) ThemeMainGold else cardTheme.secondaryTextColor
+                            )
+                        }
+
+                        // Direct Reminder Toggle Icon
+                        IconButton(onClick = {
+                            val cal = Calendar.getInstance()
+                            DatePickerDialog(context, { _, y, m, d ->
+                                TimePickerDialog(context, { _, h, min ->
+                                    val picked = Calendar.getInstance().apply {
+                                        set(y, m, d, h, min, 0)
+                                    }.timeInMillis
+                                    val decision = reminderScheduler.schedule(
+                                        n.id, title.ifBlank { "Untitled note" }, picked,
+                                        ExactAlarmScheduler.canScheduleExactAlarms(context),
+                                    )
+                                    note = n.copy(reminderTime = picked, reminderExact = decision.label == "exact")
+                                    viewModel.updateNote(n.copy(reminderTime = picked, reminderExact = decision.label == "exact"))
+                                    reminderPathLabel = decision.label
+                                    showReminderInfo = true
+                                }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
+                            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+                        }) {
+                            SymbolIcon(
+                                Symbols.ALARM,
+                                size = 20.sp,
+                                color = if (n.reminderTime != null) ThemeMainGold else cardTheme.secondaryTextColor
                             )
                         }
 
@@ -418,6 +446,7 @@ fun EditorScreen(
                             RichTextEditor(
                                 document = doc ?: RichDocument(""),
                                 onChange = { newDoc -> doc = newDoc; persist() },
+                                showToolbar = showFormatToolbar,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -434,8 +463,8 @@ fun EditorScreen(
                             )
                         }
                         items(todos, key = { it.id }) { item ->
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                                Checkbox(
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                TaskSquircleCheckbox(
                                     checked = item.done,
                                     onCheckedChange = {
                                         viewModel.toggleTodo(item)
@@ -448,7 +477,7 @@ fun EditorScreen(
                                         textDecoration = if (item.done) TextDecoration.LineThrough else TextDecoration.None
                                     ),
                                     color = if (item.done) cardTheme.secondaryTextColor.copy(alpha = 0.5f) else cardTheme.onContainerColor,
-                                    modifier = Modifier.weight(1f).padding(start = 6.dp)
+                                    modifier = Modifier.weight(1f).padding(start = 10.dp)
                                 )
                                 IconButton(onClick = {
                                     viewModel.deleteTodo(item)
@@ -543,7 +572,21 @@ fun EditorScreen(
                     ) {
                         // Palette Tool
                         IconButton(onClick = { showColorPalette = !showColorPalette }) {
-                            SymbolIcon(Symbols.PALETTE, size = 20.sp, color = MaterialTheme.colorScheme.primary)
+                            SymbolIcon(
+                                Symbols.PALETTE,
+                                size = 20.sp,
+                                color = if (showColorPalette) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // Format Tool (Aa)
+                        if (n.type != NoteType.DOODLE && n.type != NoteType.TODO) {
+                            IconButton(onClick = { showFormatToolbar = !showFormatToolbar }) {
+                                SymbolIcon(
+                                    Symbols.TEXT_FIELDS,
+                                    size = 20.sp,
+                                    color = if (showFormatToolbar) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         // Checklist Tool
                         IconButton(onClick = {
@@ -554,7 +597,7 @@ fun EditorScreen(
                             SymbolIcon(
                                 Symbols.CHECKLIST,
                                 size = 20.sp,
-                                color = if (n.type == NoteType.TODO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (n.type == NoteType.TODO) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         // Doodle Tool
@@ -566,7 +609,7 @@ fun EditorScreen(
                             SymbolIcon(
                                 Symbols.DRAW,
                                 size = 20.sp,
-                                color = if (n.type == NoteType.DOODLE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (n.type == NoteType.DOODLE) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
