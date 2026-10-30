@@ -98,6 +98,7 @@ object Symbols {
     const val SORT = "e164"
     const val STAR = "f09a"
     const val TASK_ALT = "e2e6"
+    const val TEXT_FIELDS = "e262"
     const val TITLE = "e264"
     const val UNARCHIVE = "e169"
     const val UNDO = "e166"
