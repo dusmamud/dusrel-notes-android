@@ -5,6 +5,10 @@ import android.app.TimePickerDialog
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,22 +21,27 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,26 +55,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.dusrel.notes.presentation.theme.getNoteCardTheme
 import com.dusrel.notes.data.work.ExactAlarmScheduler
 import com.dusrel.notes.data.work.cancelReminder
 import com.dusrel.notes.data.work.scheduleReminder
 import com.dusrel.notes.domain.model.Note
 import com.dusrel.notes.domain.model.NoteType
 import com.dusrel.notes.domain.model.RichDocument
+import com.dusrel.notes.domain.model.TodoItem
 import com.dusrel.notes.domain.model.migrateMarkersToSpans
 import com.dusrel.notes.domain.model.richDocumentFromSpansJson
 import com.dusrel.notes.domain.model.toSpansJson
-import com.dusrel.notes.domain.model.TodoItem
 import com.dusrel.notes.domain.reminder.ReminderAlarmScheduler
 import com.dusrel.notes.domain.reminder.ReminderScheduler
 import com.dusrel.notes.presentation.components.SymbolIcon
 import com.dusrel.notes.presentation.components.Symbols
+import com.dusrel.notes.presentation.theme.PoppinsFamily
+import com.dusrel.notes.presentation.theme.getNoteCardTheme
 import com.dusrel.notes.presentation.viewmodel.NotesViewModel
 import java.util.Calendar
 
@@ -76,8 +89,6 @@ fun EditorScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    // Observable locale: LocalConfiguration recomposes on config change, so
-    // this satisfies Lint's NonObservableLocale check.
     val locale = LocalConfiguration.current.locales[0]
     val folders by viewModel.folders.collectAsState()
     var note by remember { mutableStateOf<Note?>(null) }
@@ -87,7 +98,9 @@ fun EditorScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showReminderInfo by remember { mutableStateOf(false) }
     var reminderPathLabel by remember { mutableStateOf<String?>(null) }
-    // Exact-alarm scheduler with the WorkManager fallback (kept, not deleted).
+    var showMoreMenu by remember { mutableStateOf(false) }
+    var showColorPalette by remember { mutableStateOf(false) }
+
     val reminderScheduler = remember {
         ReminderScheduler(
             ExactAlarmScheduler(context),
@@ -98,6 +111,7 @@ fun EditorScreen(
             },
         )
     }
+
     var todos by remember { mutableStateOf<List<TodoItem>>(emptyList()) }
     var newTodoText by remember { mutableStateOf("") }
     var doodleData by remember { mutableStateOf("") }
@@ -113,9 +127,6 @@ fun EditorScreen(
             migrateMarkersToSpans(loaded?.content ?: "")
         }
         doc = loadedDoc
-        // One-way migration: persist migrated text + spans JSON once for old
-        // marker/plain notes (content must match the spans, not stay marker text).
-        // Never migrate-save a locked private note.
         if (loaded != null && loaded.richTextSpans.isBlank()
             && !(loaded.isPrivate && !viewModel.privateUnlocked.value)
         ) {
@@ -124,9 +135,8 @@ fun EditorScreen(
         doodleData = loaded?.doodleData ?: ""
         todos = viewModel.getTodos(noteId)
     }
+
     val current = note
-    // Autosave is debounced in the ViewModel (500 ms) and its scope outlives
-    // this screen, so the last keystroke is still saved after navigating back.
 
     fun persist() {
         val d = doc ?: return
@@ -141,8 +151,6 @@ fun EditorScreen(
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null && current != null) {
             val d = doc
-            // Single-note export now includes its folder (previously emptyList)
-            // and strips stale ciphertext when exporting decrypted content.
             val exported = current!!.copy(
                 title = title,
                 content = d?.text ?: current!!.content,
@@ -161,23 +169,18 @@ fun EditorScreen(
     }
 
     if (current == null) {
-        Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Loading note…", style = MaterialTheme.typography.bodyLarge)
         }
         return
     }
+
     val n = current!!
-    // Locked private notes must not open in the editor at all (note_id taps,
-    // reminder taps, widget taps all land here). Unlock first, via Private.
     val unlocked by viewModel.privateUnlocked.collectAsState()
     if (n.isPrivate && !unlocked) {
-        Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-            Text("This private note is locked.", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Unlock private notes first, then open this note again.",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+        Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            SymbolIcon(Symbols.LOCK, size = 48.sp, color = MaterialTheme.colorScheme.primary)
+            Text("This note is locked in Private Vault", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
             Button(onClick = onBack, modifier = Modifier.padding(top = 16.dp)) { Text("Back") }
         }
         return
@@ -185,253 +188,394 @@ fun EditorScreen(
 
     val isDark = isSystemInDarkTheme()
     val cardTheme = getNoteCardTheme(n.color, isDark)
+    val currentFolder = folders.firstOrNull { it.id == n.folderId }
 
+    // Full Immersion Paper Canvas
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = cardTheme.containerColor,
         contentColor = cardTheme.onContainerColor
     ) {
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = {
-                        val newPinned = !n.pinned
-                        note = n.copy(pinned = newPinned)
-                        viewModel.updateNote(n.copy(pinned = newPinned))
-                    }) {
-                        SymbolIcon(
-                            Symbols.PUSH_PIN,
-                            filled = n.pinned,
-                            color = if (n.pinned) Color(0xFFE5A93C) else cardTheme.secondaryTextColor
-                        )
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                    IconButton(onClick = {
-                        note = n.copy(archived = !n.archived)
-                        viewModel.setArchived(n, !n.archived)
-                    }) {
-                        SymbolIcon(if (n.archived) Symbols.UNARCHIVE else Symbols.ARCHIVE, color = cardTheme.secondaryTextColor)
-                    }
-                    IconButton(onClick = {
-                        if (n.trashed) {
-                            showDeleteConfirm = true
-                        } else {
-                            viewModel.moveToTrash(n)
-                            reminderScheduler.cancelAll(n.id)
-                            onBack()
-                        }
-                    }) { SymbolIcon(Symbols.DELETE, color = cardTheme.secondaryTextColor) }
-                    IconButton(onClick = {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, viewModel.noteToShareText(n.copy(title = title, content = doc?.text ?: ""), todos))
-                        }
-                        shareLauncher.launch(Intent.createChooser(intent, "Share note"))
-                    }) { SymbolIcon(Symbols.SHARE, color = cardTheme.secondaryTextColor) }
-                    IconButton(onClick = { exportLauncher.launch("note-${n.id}.json") }) { SymbolIcon(Symbols.DOWNLOAD, color = cardTheme.secondaryTextColor) }
-                }
-                val dateFormat = java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", locale)
-                Text(
-                    "Created " + dateFormat.format(java.util.Date(n.createdAt)) +
-                        " • Updated " + dateFormat.format(java.util.Date(n.updatedAt)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = cardTheme.secondaryTextColor,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it; persist() },
-                    label = { Text("Title") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                // 5 Theme Swatches (Yellow, Blue, White, Green, Pink)
+        Box(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Top Header Row (Back, Folder Chip, Pin, More Menu)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text(
-                        "Theme:",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                        color = cardTheme.secondaryTextColor
-                    )
-                    (0..4).forEach { themeId ->
-                        val previewTheme = getNoteCardTheme(themeId, isDark)
-                        val isSelected = (n.color % 5).let { if (it < 0) it + 5 else it } == themeId
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(previewTheme.containerColor)
-                                .border(
-                                    width = if (isSelected) 2.5.dp else 1.dp,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else previewTheme.borderColor,
-                                    shape = CircleShape
-                                )
-                                .clickable {
-                                    note = n.copy(color = themeId)
-                                    viewModel.updateNote(n.copy(color = themeId))
-                                },
-                            contentAlignment = Alignment.Center
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onBack) {
+                            SymbolIcon(Symbols.ARROW_BACK, size = 22.sp, color = cardTheme.onContainerColor)
+                        }
+                        // Folder Selector Pill Chip
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = cardTheme.borderColor.copy(alpha = 0.5f),
+                            modifier = Modifier.clickable { showFolderDialog = true }
                         ) {
-                            if (isSelected) {
-                                SymbolIcon(Symbols.CHECK, size = 16.sp, color = previewTheme.onContainerColor)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                SymbolIcon(Symbols.FOLDER, size = 14.sp, color = cardTheme.onContainerColor)
+                                Text(
+                                    text = if (currentFolder != null) " ${currentFolder.name} ▾" else " Move to folder ▾",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = cardTheme.onContainerColor,
+                                    modifier = Modifier.padding(start = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Pin Toggle Icon
+                        IconButton(onClick = {
+                            val newPinned = !n.pinned
+                            note = n.copy(pinned = newPinned)
+                            viewModel.updateNote(n.copy(pinned = newPinned))
+                        }) {
+                            SymbolIcon(
+                                Symbols.PUSH_PIN,
+                                size = 20.sp,
+                                filled = n.pinned,
+                                color = if (n.pinned) Color(0xFFE5A93C) else cardTheme.secondaryTextColor
+                            )
+                        }
+
+                        // 3-dots More Menu
+                        Box {
+                            IconButton(onClick = { showMoreMenu = true }) {
+                                SymbolIcon(Symbols.MORE_VERT, size = 22.sp, color = cardTheme.onContainerColor)
+                            }
+                            DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(if (n.isPrivate) "Unlock from Vault" else "Move to Vault") },
+                                    leadingIcon = { SymbolIcon(Symbols.LOCK, size = 18.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        val newPrivate = !n.isPrivate
+                                        note = n.copy(isPrivate = newPrivate)
+                                        viewModel.updateNote(n.copy(isPrivate = newPrivate))
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Set reminder") },
+                                    leadingIcon = { SymbolIcon(Symbols.ALARM_ADD, size = 18.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        val cal = Calendar.getInstance()
+                                        DatePickerDialog(context, { _, y, m, d ->
+                                            TimePickerDialog(context, { _, h, min ->
+                                                val picked = Calendar.getInstance().apply {
+                                                    set(y, m, d, h, min, 0)
+                                                }.timeInMillis
+                                                val decision = reminderScheduler.schedule(
+                                                    n.id, title.ifBlank { "Untitled note" }, picked,
+                                                    ExactAlarmScheduler.canScheduleExactAlarms(context),
+                                                )
+                                                note = n.copy(reminderTime = picked, reminderExact = decision.label == "exact")
+                                                viewModel.updateNote(n.copy(reminderTime = picked, reminderExact = decision.label == "exact"))
+                                                reminderPathLabel = decision.label
+                                                showReminderInfo = true
+                                            }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
+                                        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (n.archived) "Unarchive" else "Archive") },
+                                    leadingIcon = { SymbolIcon(if (n.archived) Symbols.UNARCHIVE else Symbols.ARCHIVE, size = 18.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        note = n.copy(archived = !n.archived)
+                                        viewModel.setArchived(n, !n.archived)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share note") },
+                                    leadingIcon = { SymbolIcon(Symbols.SHARE, size = 18.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT, viewModel.noteToShareText(n.copy(title = title, content = doc?.text ?: ""), todos))
+                                        }
+                                        shareLauncher.launch(Intent.createChooser(intent, "Share note"))
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Export backup JSON") },
+                                    leadingIcon = { SymbolIcon(Symbols.DOWNLOAD, size = 18.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        exportLauncher.launch("note-${n.id}.json")
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Delete note", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = { SymbolIcon(Symbols.DELETE, size = 18.sp, color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        if (n.trashed) {
+                                            showDeleteConfirm = true
+                                        } else {
+                                            viewModel.moveToTrash(n)
+                                            reminderScheduler.cancelAll(n.id)
+                                            onBack()
+                                        }
+                                    }
+                                )
                             }
                         }
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Private", style = MaterialTheme.typography.bodyMedium, color = cardTheme.onContainerColor)
-                    Switch(
-                        checked = n.isPrivate,
-                        onCheckedChange = {
-                            note = n.copy(isPrivate = it); viewModel.updateNote(n.copy(isPrivate = it))
-                        }
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(if (n.pinned) "Pinned" else "Unpinned", style = MaterialTheme.typography.bodyMedium, color = cardTheme.onContainerColor)
-                    Switch(
-                        checked = n.pinned,
-                        onCheckedChange = {
-                            note = n.copy(pinned = it); viewModel.updateNote(n.copy(pinned = it))
-                        }
-                    )
-                }
-                val currentFolder = folders.firstOrNull { it.id == n.folderId }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
-                    OutlinedButton(onClick = { showFolderDialog = true }) {
-                        SymbolIcon(Symbols.FOLDER, size = 18.sp, color = cardTheme.secondaryTextColor)
-                        Text(
-                            text = if (currentFolder != null) " " + currentFolder.name else " Move to folder",
-                            color = cardTheme.onContainerColor,
-                            modifier = Modifier.padding(start = 4.dp)
+
+                // Borderless Scrollable Paper Body
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 20.dp)
+                ) {
+                    item {
+                        // Borderless Title Input (22sp, bold, zero background boxes)
+                        BasicTextField(
+                            value = title,
+                            onValueChange = { title = it; persist() },
+                            textStyle = TextStyle(
+                                fontFamily = PoppinsFamily,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = cardTheme.onContainerColor
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            decorationBox = { innerTextField ->
+                                if (title.isEmpty()) {
+                                    Text(
+                                        "Title",
+                                        fontFamily = PoppinsFamily,
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = cardTheme.secondaryTextColor.copy(alpha = 0.5f)
+                                    )
+                                }
+                                innerTextField()
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
                         )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedButton(onClick = {
-                        val cal = Calendar.getInstance()
-                        DatePickerDialog(context, { _, y, m, d ->
-                            TimePickerDialog(context, { _, h, min ->
-                                val picked = Calendar.getInstance().apply {
-                                    set(y, m, d, h, min, 0)
-                                }.timeInMillis
-                                val decision = reminderScheduler.schedule(
-                                    n.id, title.ifBlank { "Untitled note" }, picked,
-                                    ExactAlarmScheduler.canScheduleExactAlarms(context),
-                                )
-                                note = n.copy(reminderTime = picked, reminderExact = decision.label == "exact")
-                                viewModel.updateNote(n.copy(reminderTime = picked, reminderExact = decision.label == "exact"))
-                                reminderPathLabel = decision.label
-                                showReminderInfo = true
-                            }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
-                        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
-                    }) {
-                        SymbolIcon(Symbols.ALARM_ADD, size = 18.sp, color = cardTheme.secondaryTextColor)
-                        Text(" Reminder", color = cardTheme.onContainerColor, modifier = Modifier.padding(start = 4.dp))
-                    }
-                }
-            if (n.reminderTime != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Reminder: " + java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", locale)
-                            .format(java.util.Date(n.reminderTime!!)),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    TextButton(onClick = {
-                        note = n.copy(reminderTime = null)
-                        viewModel.updateNote(n.copy(reminderTime = null))
-                        reminderScheduler.cancelAll(n.id)
-                    }) { Text("Cancel") }
-                }
-            }
-            if (showReminderInfo) {
-                val pathText = if (reminderPathLabel == "exact") "exact" else "best-effort"
-                Text("Reminder set ($pathText). You will get a notification at that time.", style = MaterialTheme.typography.bodyMedium)
-                if (reminderPathLabel != "exact") {
-                    OutlinedButton(onClick = {
-                        context.startActivity(ExactAlarmScheduler.createExactAlarmSettingsIntent(context))
-                    }) { Text("Allow exact alarms") }
-                }
-            }
-        }
 
-        if (n.type == NoteType.DOODLE) {
-            item {
-                Text("Doodle", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
-                DoodleCanvas(initialData = doodleData, onStrokesChanged = { doodleData = it; persist() })
-            }
-        } else {
-            item {
-                // Real spans, rendered in the editor itself — no marker preview.
-                RichTextEditor(
-                    document = doc ?: RichDocument(""),
-                    onChange = { newDoc -> doc = newDoc; persist() },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                )
-            }
-        }
+                        // Subtitle Meta Line (Timestamp + Character count)
+                        val dateFormat = java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", locale)
+                        val charCount = (title.length + (doc?.text?.length ?: 0))
+                        Text(
+                            text = dateFormat.format(java.util.Date(n.updatedAt)) + " | $charCount characters",
+                            fontSize = 12.sp,
+                            color = cardTheme.secondaryTextColor.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(top = 6.dp, bottom = 14.dp)
+                        )
 
-        if (n.type == NoteType.TODO) {
-            item {
-                Text("Checklist", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
-                val done = todos.count { it.done }
-                Text("$done of ${todos.size} done", style = MaterialTheme.typography.bodyMedium)
-            }
-            items(todos, key = { it.id }) { item ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Checkbox(checked = item.done, onCheckedChange = {
-                        viewModel.toggleTodo(item)
-                        todos = todos.map { if (it.id == item.id) it.copy(done = !it.done) else it }
-                    })
-                    Text(item.text, modifier = Modifier.weight(1f))
-                    IconButton(onClick = {
-                        viewModel.deleteTodo(item)
-                        todos = todos.filter { it.id != item.id }
-                    }) { SymbolIcon(Symbols.DELETE, size = 20.sp) }
-                }
-            }
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = newTodoText,
-                        onValueChange = { newTodoText = it },
-                        label = { Text("New item") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = {
-                        if (newTodoText.isNotBlank()) {
-                            viewModel.addTodo(n.id, newTodoText.trim())
-                            todos = todos + TodoItem(noteId = n.id, text = newTodoText.trim(), position = todos.size)
-                            newTodoText = ""
+                        if (n.reminderTime != null) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = cardTheme.borderColor.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        SymbolIcon(Symbols.ALARM, size = 16.sp, color = MaterialTheme.colorScheme.primary)
+                                        Text(
+                                            " Reminder: " + java.text.SimpleDateFormat("dd MMM, HH:mm", locale).format(java.util.Date(n.reminderTime!!)),
+                                            fontSize = 12.sp,
+                                            color = cardTheme.onContainerColor
+                                        )
+                                    }
+                                    TextButton(onClick = {
+                                        note = n.copy(reminderTime = null)
+                                        viewModel.updateNote(n.copy(reminderTime = null))
+                                        reminderScheduler.cancelAll(n.id)
+                                    }) { Text("Clear", fontSize = 12.sp) }
+                                }
+                            }
                         }
-                    }) { Text("Add") }
+                    }
+
+                    // Doodle or Rich Text or Checklist
+                    if (n.type == NoteType.DOODLE) {
+                        item {
+                            DoodleCanvas(
+                                initialData = doodleData,
+                                onStrokesChanged = { doodleData = it; persist() }
+                            )
+                        }
+                    } else {
+                        item {
+                            RichTextEditor(
+                                document = doc ?: RichDocument(""),
+                                onChange = { newDoc -> doc = newDoc; persist() },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    if (n.type == NoteType.TODO) {
+                        item {
+                            Text(
+                                "Checklist (${todos.count { it.done }}/${todos.size})",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = cardTheme.onContainerColor,
+                                modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
+                            )
+                        }
+                        items(todos, key = { it.id }) { item ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                Checkbox(
+                                    checked = item.done,
+                                    onCheckedChange = {
+                                        viewModel.toggleTodo(item)
+                                        todos = todos.map { if (it.id == item.id) it.copy(done = !it.done) else it }
+                                    }
+                                )
+                                Text(
+                                    text = item.text,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        textDecoration = if (item.done) TextDecoration.LineThrough else TextDecoration.None
+                                    ),
+                                    color = if (item.done) cardTheme.secondaryTextColor.copy(alpha = 0.5f) else cardTheme.onContainerColor,
+                                    modifier = Modifier.weight(1f).padding(start = 6.dp)
+                                )
+                                IconButton(onClick = {
+                                    viewModel.deleteTodo(item)
+                                    todos = todos.filter { it.id != item.id }
+                                }) { SymbolIcon(Symbols.CLOSE, size = 16.sp, color = cardTheme.secondaryTextColor) }
+                            }
+                        }
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                                BasicTextField(
+                                    value = newTodoText,
+                                    onValueChange = { newTodoText = it },
+                                    textStyle = TextStyle(fontSize = 14.sp, color = cardTheme.onContainerColor),
+                                    decorationBox = { inner ->
+                                        if (newTodoText.isEmpty()) Text("+ Add item", fontSize = 14.sp, color = cardTheme.secondaryTextColor.copy(alpha = 0.5f))
+                                        inner()
+                                    },
+                                    modifier = Modifier.weight(1f).padding(vertical = 8.dp)
+                                )
+                                if (newTodoText.isNotBlank()) {
+                                    TextButton(onClick = {
+                                        viewModel.addTodo(n.id, newTodoText.trim())
+                                        todos = todos + TodoItem(noteId = n.id, text = newTodoText.trim(), position = todos.size)
+                                        newTodoText = ""
+                                    }) { Text("Add") }
+                                }
+                            }
+                        }
+                    }
+
+                    item { Spacer(modifier = Modifier.height(110.dp)) }
+                }
+
+                // Color Palette Swatches (Popped above bottom bar)
+                AnimatedVisibility(visible = showColorPalette) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 6.dp,
+                        shadowElevation = 6.dp,
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(bottom = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            (0..4).forEach { themeId ->
+                                val previewTheme = getNoteCardTheme(themeId, isDark)
+                                val isSelected = (n.color % 5).let { if (it < 0) it + 5 else it } == themeId
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(previewTheme.containerColor)
+                                        .border(
+                                            width = if (isSelected) 2.5.dp else 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else previewTheme.borderColor,
+                                            shape = CircleShape
+                                        )
+                                        .clickable {
+                                            note = n.copy(color = themeId)
+                                            viewModel.updateNote(n.copy(color = themeId))
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSelected) {
+                                        SymbolIcon(Symbols.CHECK, size = 15.sp, color = previewTheme.onContainerColor)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Bottom Floating Toolbar
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        // Palette Tool
+                        IconButton(onClick = { showColorPalette = !showColorPalette }) {
+                            SymbolIcon(Symbols.PALETTE, size = 20.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                        // Checklist Tool
+                        IconButton(onClick = {
+                            val newType = if (n.type == NoteType.TODO) NoteType.NOTE else NoteType.TODO
+                            note = n.copy(type = newType)
+                            viewModel.updateNote(n.copy(type = newType))
+                        }) {
+                            SymbolIcon(
+                                Symbols.CHECKLIST,
+                                size = 20.sp,
+                                color = if (n.type == NoteType.TODO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // Doodle Tool
+                        IconButton(onClick = {
+                            val newType = if (n.type == NoteType.DOODLE) NoteType.NOTE else NoteType.DOODLE
+                            note = n.copy(type = newType)
+                            viewModel.updateNote(n.copy(type = newType))
+                        }) {
+                            SymbolIcon(
+                                Symbols.DRAW,
+                                size = 20.sp,
+                                color = if (n.type == NoteType.DOODLE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
         }
-        item { Spacer(modifier = Modifier.height(32.dp)) }
-    }
     }
 
-    // Trashed note in the editor: permanent delete uses the same
-    // confirmation pattern as the list's delete dialog.
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete permanently?") },
-            text = { Text("This note cannot be recovered.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deletePermanently(n)
-                    reminderScheduler.cancelAll(n.id)
-                    showDeleteConfirm = false
-                    onBack()
-                }) { Text("Delete") }
-            },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Keep") } }
-        )
-    }
+    // Move to folder dialog
     if (showFolderDialog) {
         AlertDialog(
             onDismissRequest = { showFolderDialog = false },
@@ -449,6 +593,24 @@ fun EditorScreen(
                 }
             },
             confirmButton = { TextButton(onClick = { showFolderDialog = false }) { Text("Close") } }
+        )
+    }
+
+    // Confirm Delete Dialog
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete permanently?") },
+            text = { Text("This note cannot be recovered.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deletePermanently(n)
+                    reminderScheduler.cancelAll(n.id)
+                    showDeleteConfirm = false
+                    onBack()
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Keep") } }
         )
     }
 }

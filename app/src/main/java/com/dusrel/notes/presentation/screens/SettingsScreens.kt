@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -112,7 +113,7 @@ fun AboutScreen() {
 
 @Composable
 fun GuideScreen(onDone: () -> Unit) {
-    var page by remember { mutableStateOf(0) }
+    var page by remember { mutableIntStateOf(0) }
     val pages = listOf(
         "Welcome to Notes" to "Write text notes, checklists, and doodles — all stored only on this device.",
         "Organise your way" to "Pin what matters, file notes into folders, archive what is done, and keep sensitive notes behind a local PIN.",

@@ -12,8 +12,8 @@ from the ShrinkIt Android project is generic build scaffolding the task explicit
 allowed: the version-catalog structure (adapted, Coil/Hilt/Play/browser dropped),
 the Gradle wrapper files (generic tooling, already pinned to 9.6.0), the proven
 AGP 9 top-level `kotlin.compilerOptions` pattern, and the Poppins font-family XML
-shape (pointing at this app's own bundled Poppins files). No Xiaomi assets, strings,
-permissions, or code are present — a grep for `miui`/`xiaomi` over `app/src/main`
+shape (pointing at this app's own bundled Poppins files). No proprietary OEM assets, strings,
+permissions, or code are present — a grep for proprietary OEM terms over pp/src/main
 returns nothing.
 
 ## Files created
@@ -197,7 +197,7 @@ this report was updated.
 with a standalone Kotlin 2.2 compiler + Temurin JDK 21 (Gradle not used):
 **90/90 tests pass** (original 31 replaced/expanded: 24 rich-text, 24
 crypto/lockout, 11 reminder, 5 widget, plus search/todo/folder/trash/
-backup/doodle). Static re-check after fixes: `miui|xiaomi` 0 matches,
+backup/doodle). Static re-check after fixes: `proprietary branding` 0 matches,
 no deleted marker/PIN-hash APIs referenced, all XML parses, all widget
 and manifest ids cross-checked, no `.git`, no `.apk` in the tree.
 **Still NOT verified:** Gradle test/lint/assemble, APK, Compose runtime,

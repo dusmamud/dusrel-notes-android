@@ -8,13 +8,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,7 +36,6 @@ import com.dusrel.notes.data.local.MIGRATION_2_3
 import com.dusrel.notes.data.local.NotesDatabase
 import com.dusrel.notes.data.local.PreferencesRepository
 import com.dusrel.notes.data.local.RoomNotesRepository
-import com.dusrel.notes.presentation.widgets.refreshListWidget
 import com.dusrel.notes.domain.model.NoteType
 import com.dusrel.notes.presentation.components.SymbolIcon
 import com.dusrel.notes.presentation.components.Symbols
@@ -47,13 +47,12 @@ import com.dusrel.notes.presentation.screens.NotesListScreen
 import com.dusrel.notes.presentation.screens.PrivateScreen
 import com.dusrel.notes.presentation.screens.RemindersScreen
 import com.dusrel.notes.presentation.screens.SettingsScreen
-import com.dusrel.notes.presentation.screens.TodoScreen
 import com.dusrel.notes.presentation.theme.NotesTheme
 import com.dusrel.notes.presentation.viewmodel.NotesViewModel
+import com.dusrel.notes.presentation.widgets.refreshListWidget
 
 object Routes {
     const val LIST = "list"
-    const val TODO = "todo"
     const val EDITOR = "editor"
     const val FOLDERS = "folders"
     const val PRIVATE = "private"
@@ -68,7 +67,6 @@ object Routes {
 class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
-        // Best-effort widget refresh when returning to the app/home.
         refreshListWidget(this)
     }
 
@@ -90,7 +88,6 @@ class MainActivity : ComponentActivity() {
             PreferencesRepository(applicationContext),
         )
         setContent {
-            // Refresh the live list widget whenever stored notes change.
             LaunchedEffect(Unit) {
                 viewModel.notes.collect { refreshListWidget(applicationContext) }
             }
@@ -99,24 +96,8 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val backStack by navController.currentBackStackEntryAsState()
                 val currentRoute = backStack?.destination?.route
-                // 5 tabs (decision: keep-all, option (a) in the task).
-                // A 5-item Material 3 NavigationBar is the standard layout
-                // and nothing in the existing code breaks at 5 items, so
-                // Folders is NOT folded away: it stays the folder-management
-                // destination, and the notes page additionally gets a folder
-                // filter strip. Notes stays the start destination.
-                val mainTabs = listOf(
-                    Triple(Routes.LIST, "Notes", Symbols.HOME),
-                    Triple(Routes.TODO, "Todo", Symbols.CHECKLIST),
-                    Triple(Routes.FOLDERS, "Folders", Symbols.FOLDER),
-                    Triple(Routes.REMINDERS, "Reminders", Symbols.ALARM),
-                    Triple(Routes.SETTINGS, "Settings", Symbols.SETTINGS),
-                )
-                val showBottomBar = currentRoute in mainTabs.map { it.first }
+
                 var quickNoteConsumed by remember { mutableStateOf(false) }
-                // Decide the start destination from the FIRST real DataStore
-                // value, not from the StateFlow's initial false (which would
-                // wrongly send returning users to the guide every launch).
                 var startRoute by remember { mutableStateOf<String?>(null) }
                 LaunchedEffect(Unit) {
                     startRoute = if (viewModel.isGuideDone()) Routes.LIST else Routes.GUIDE
@@ -129,8 +110,6 @@ class MainActivity : ComponentActivity() {
                             navController.navigate(Routes.editor(id))
                         }
                     }
-                    // Widget row tap / reminder notification tap: open that note,
-                    // unless it is a locked private note — then go to Private.
                     val noteIdExtra = intent.getLongExtra("note_id", -1L)
                     if (!quickNoteConsumed && noteIdExtra > 0) {
                         quickNoteConsumed = true
@@ -142,47 +121,35 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                // Show top app bar only on secondary sub-screens (not on home or editor)
+                val showSubScreenTopBar = currentRoute in listOf(
+                    Routes.FOLDERS, Routes.PRIVATE, Routes.REMINDERS, Routes.SETTINGS, Routes.ABOUT
+                )
+
                 Scaffold(
-                    bottomBar = {
-                        if (showBottomBar) {
-                            NavigationBar {
-                                mainTabs.forEach { (route, label, icon) ->
-                                    val selected = currentRoute == route
-                                    NavigationBarItem(
-                                        selected = selected,
-                                        onClick = {
-                                            // Tab switches must NOT grow the back stack and must
-                                            // preserve each tab's state: save the tab being left,
-                                            // restore the tab being entered, single-top. Back
-                                            // from a tab therefore exits (or returns to the
-                                            // start destination), never walks tab history.
-                                            navController.navigate(route) {
-                                                // LIST (not the graph's start, which is GUIDE on
-                                                // first run before it is popped): LIST is always
-                                                // in the stack whenever the bottom bar is shown.
-                                                popUpTo(Routes.LIST) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        },
-                                        icon = { SymbolIcon(icon, filled = selected) },
-                                        label = { Text(label) },
-                                    )
-                                }
-                            }
-                        }
-                    },
+                    modifier = Modifier.fillMaxSize(),
                     topBar = {
-                        if (!showBottomBar && currentRoute != null && currentRoute != Routes.GUIDE) {
-                            androidx.compose.material3.TopAppBar(
-                                title = { Text("Notes") },
+                        if (showSubScreenTopBar) {
+                            TopAppBar(
+                                title = {
+                                    Text(
+                                        when (currentRoute) {
+                                            Routes.FOLDERS -> "Folders"
+                                            Routes.PRIVATE -> "Private Notes"
+                                            Routes.REMINDERS -> "Reminders"
+                                            Routes.SETTINGS -> "Settings"
+                                            Routes.ABOUT -> "About"
+                                            else -> ""
+                                        }
+                                    )
+                                },
                                 navigationIcon = {
                                     IconButton(onClick = { navController.popBackStack() }) {
                                         SymbolIcon(Symbols.ARROW_BACK)
                                     }
-                                }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors()
                             )
                         }
                     }
@@ -191,73 +158,64 @@ class MainActivity : ComponentActivity() {
                     if (start == null) {
                         Text("Loading…", modifier = Modifier.padding(innerPadding))
                     } else {
-                    NavHost(
-                        navController = navController,
-                        startDestination = start,
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable(Routes.LIST) {
-                            NotesListScreen(
-                                viewModel = viewModel,
-                                onOpenNote = { navController.navigate(Routes.editor(it)) },
-                                onOpenPrivate = { navController.navigate(Routes.PRIVATE) },
-                                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                            )
-                        }
-                        composable(Routes.TODO) {
-                            TodoScreen(
-                                viewModel = viewModel,
-                                onOpenNote = { navController.navigate(Routes.editor(it)) },
-                                onCreateChecklist = {
-                                    viewModel.createNote(NoteType.TODO) { id ->
-                                        navController.navigate(Routes.editor(id))
+                        NavHost(
+                            navController = navController,
+                            startDestination = start,
+                            modifier = Modifier.padding(if (showSubScreenTopBar) innerPadding else androidx.compose.foundation.layout.PaddingValues())
+                        ) {
+                            composable(Routes.LIST) {
+                                NotesListScreen(
+                                    viewModel = viewModel,
+                                    onOpenNote = { navController.navigate(Routes.editor(it)) },
+                                    onOpenPrivate = { navController.navigate(Routes.PRIVATE) },
+                                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                                    onOpenFolders = { navController.navigate(Routes.FOLDERS) },
+                                    onOpenReminders = { navController.navigate(Routes.REMINDERS) },
+                                )
+                            }
+                            composable(
+                                route = "editor/{noteId}",
+                                arguments = listOf(navArgument("noteId") { type = NavType.LongType })
+                            ) { entry ->
+                                EditorScreen(
+                                    noteId = entry.arguments?.getLong("noteId") ?: 0L,
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() },
+                                )
+                            }
+                            composable(Routes.FOLDERS) {
+                                FoldersScreen(viewModel = viewModel, onOpenFolder = { folderId ->
+                                    viewModel.folderFilterId.value = folderId
+                                    viewModel.listTab.value = com.dusrel.notes.presentation.viewmodel.ListTab.ACTIVE
+                                    navController.navigate(Routes.LIST) {
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                },
-                            )
+                                })
+                            }
+                            composable(Routes.PRIVATE) {
+                                PrivateScreen(viewModel = viewModel, onOpenNote = { navController.navigate(Routes.editor(it)) })
+                            }
+                            composable(Routes.REMINDERS) {
+                                RemindersScreen(viewModel = viewModel, onOpenNote = { navController.navigate(Routes.editor(it)) })
+                            }
+                            composable(Routes.SETTINGS) {
+                                SettingsScreen(
+                                    viewModel = viewModel,
+                                    onOpenAbout = { navController.navigate(Routes.ABOUT) },
+                                    onOpenPrivate = { navController.navigate(Routes.PRIVATE) },
+                                )
+                            }
+                            composable(Routes.ABOUT) { AboutScreen() }
+                            composable(Routes.GUIDE) {
+                                GuideScreen(onDone = {
+                                    viewModel.markGuideDone()
+                                    navController.navigate(Routes.LIST) {
+                                        popUpTo(Routes.GUIDE) { inclusive = true }
+                                    }
+                                })
+                            }
                         }
-                        composable(
-                            route = "editor/{noteId}",
-                            arguments = listOf(navArgument("noteId") { type = NavType.LongType })
-                        ) { entry ->
-                            EditorScreen(
-                                noteId = entry.arguments?.getLong("noteId") ?: 0L,
-                                viewModel = viewModel,
-                                onBack = { navController.popBackStack() },
-                            )
-                        }
-                        composable(Routes.FOLDERS) {
-                            FoldersScreen(viewModel = viewModel, onOpenFolder = { folderId ->
-                                viewModel.folderFilterId.value = folderId
-                                viewModel.listTab.value = com.dusrel.notes.presentation.viewmodel.ListTab.ACTIVE
-                                navController.navigate(Routes.LIST) {
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            })
-                        }
-                        composable(Routes.PRIVATE) {
-                            PrivateScreen(viewModel = viewModel, onOpenNote = { navController.navigate(Routes.editor(it)) })
-                        }
-                        composable(Routes.REMINDERS) {
-                            RemindersScreen(viewModel = viewModel, onOpenNote = { navController.navigate(Routes.editor(it)) })
-                        }
-                        composable(Routes.SETTINGS) {
-                            SettingsScreen(
-                                viewModel = viewModel,
-                                onOpenAbout = { navController.navigate(Routes.ABOUT) },
-                                onOpenPrivate = { navController.navigate(Routes.PRIVATE) },
-                            )
-                        }
-                        composable(Routes.ABOUT) { AboutScreen() }
-                        composable(Routes.GUIDE) {
-                            GuideScreen(onDone = {
-                                viewModel.markGuideDone()
-                                navController.navigate(Routes.LIST) {
-                                    popUpTo(Routes.GUIDE) { inclusive = true }
-                                }
-                            })
-                        }
-                    }
                     }
                 }
             }
