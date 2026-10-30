@@ -18,21 +18,11 @@
 
 ---
 
-## Phase 2: Note Editor & Toolbox Architecture — [NEXT]
-1. **Dual-Mode Action Bar (`v12_phone_edit_header.xml`):**
-   - View Mode: Share (`ic_action_share`), Theme Palette (`v12_ic_action_theme`), 3-dots Menu (`ic_action_more`).
-   - Edit Mode: Undo (`ic_action_undo`), Redo (`ic_action_redo`), Done Checkmark (`ic_action_done`).
-2. **Note Body Structure (`phone_note_edit.xml`):**
-   - Folder selector pill chip (`note_edit_folder_layout.xml`) above Title.
-   - Title (22sp bold, borderless).
-   - Extra Info Line (Date/time, character count, lock badge, clock badge).
-   - Note body with rich text and checklist spans.
-3. **Docked Full-Width Bottom Toolbar (`small_screen_mode_tool_group.xml`):**
-   - AI Assistant (`icon_ai`)
-   - Voice note recorder (`ic_tool_voice` with `RecordingWaveView`)
-   - Gallery image picker (`ic_tool_gallery`)
-   - Doodle drawing canvas (`ic_tool_doodle` with 5 brushes, dual erasers, color palette)
-   - Checklist toggle (`ic_tool_checkbox`)
-   - Expandable Rich Text drawer (`ic_tool_richtext` with 14 formatting tools)
-4. **Task Toolbox / Floating Sidebar (`FloatFullWindow`):**
-   - Quick task edge panel for fast creation and check-off.
+## Phase 2: Note Editor & Toolbar Architecture — [COMPLETED & VERIFYING]
+- [x] Docked full-width bottom toolbar (`small_screen_mode_tool_group.xml`): AI assistant, voice recorder with wave animation, gallery photo picker, doodle canvas mode, checklist toggle.
+- [x] Vertical gradient divider (`rich_text_divide`) and expandable rich text toggle (`rich_text_switch`).
+- [x] Horizontally scrollable rich text formatting drawer (`RichTextIconHorizontalView.java`): Bold, Italic, Underline, Bullet/Numbered lists, H1, H2, Font size A+/A-.
+- [x] Dual-mode top action bar (`v12_phone_edit_header.xml`): View Mode (Share, 14-Theme Palette, 3-dots Menu) vs Edit Mode (Undo, Redo, Done Checkmark).
+- [x] Done checkmark saves note, dismisses keyboard, clears focus, and restores View Mode.
+- [x] Folder selector pill chip (`note_edit_folder_layout.xml`) positioned above the title.
+- [x] Extra info line with timestamp, character count, lock badge, and alarm badge.
