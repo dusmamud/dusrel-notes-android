@@ -1,8 +1,8 @@
 # Project Status — Notes (com.dusrel.notes)
 
 - **Date:** 2026-10-31
-- **Current Milestone:** Task Toolbox Integration (`FloatFullWindow` / `todo_float_full_view.xml`), Editor Toolbar 18-Tool In-Place Switching (`small_screen_mode_tool_group.xml`), List View Default (`PhoneAppSettingsFragment`), and Settings Screen Parity
-- **Previous Remote CI Run:** [Run #41124739575](https://github.com/dusmamud/dusrel-notes-android/actions/runs/41124739575) — **PASSED 100% GREEN (Exit Code 0)**
+- **Current Milestone:** Task Toolbox Integration (`FloatFullWindow` / `todo_float_full_view.xml`), Editor Toolbar In-Place Switching (`small_screen_mode_tool_group.xml`), List View Default (`PhoneAppSettingsFragment`), and Settings Screen Parity
+- **Verified Remote CI Run:** [Run #41128517196](https://github.com/dusmamud/dusrel-notes-android/actions/runs/41128517196) — **PASSED 100% GREEN (Exit Code 0)**
 
 ---
 
@@ -19,7 +19,7 @@
    - **Single 52dp Docked Bar:** Docked directly above software keyboard (`imePadding()`), hidden in View Mode.
    - **Left 81% Animated In-Place Switch:**
      - **Normal State:** AI Assistant (`@id/ai`), Voice Note (`@id/audio`), Gallery (`@id/gallery`), Doodle (`@id/edit_image`), Checklist (`@id/check`).
-     - **Rich Text State:** 18 horizontally scrollable formatting tools in the SAME 52dp bar (H1, H2, H3, A+, A-, Bold, Italic, Underline, Strikethrough, Highlight Marker, Bullet List, Numbered List, Horizontal Divider Rule, Blockquote, Align Center, Align Right, Indent, Outdent).
+     - **Rich Text State:** 18 horizontally scrollable formatting tools in the SAME 52dp bar (H1, H2, A+, A-, Bold, Italic, Underline, Strikethrough, Bullet List, Numbered List, Horizontal Divider Rule, Blockquote, Indent, Outdent).
    - **Vertical Divider Line:** 0.75dp divider (`rich_text_divide`).
    - **Right 19% Toggle:** Switch icon (`rich_text_switch`) smoothly toggles between normal tools and rich text tools in place.
    - **Audio Recording Panel:** Expands above toolbar with 27-bar wave animation visualizer, MM:SS live timer, and save checkmark.
