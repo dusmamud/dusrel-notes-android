@@ -35,6 +35,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import com.dusrel.notes.presentation.theme.ThemeMainGold
 import kotlinx.coroutines.launch
+import com.dusrel.notes.presentation.viewmodel.NotesViewModel
 
 @Composable
 fun SettingsScreen(viewModel: NotesViewModel, onOpenAbout: () -> Unit, onOpenPrivate: () -> Unit) {

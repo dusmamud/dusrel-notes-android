@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -834,16 +836,7 @@ fun EditorScreen(
                                 }) {
                                     Text("H2", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 3. Heading 3 (@id/thrid_level)
-                                TextButton(onClick = {
-                                    doc?.let { d ->
-                                        doc = toggleParagraph(d, 0, ParagraphType.HEADING)
-                                        persist()
-                                    }
-                                }) {
-                                    Text("H3", fontWeight = FontWeight.Medium, fontSize = 12.sp, color = cardTheme.onContainerColor)
-                                }
-                                // 4. Font Size A+ (@id/increase_font)
+                                // 3. Font Size A+ (@id/increase_font)
                                 TextButton(onClick = {
                                     val newText = (doc?.text ?: "") + " "
                                     doc = (doc ?: RichDocument("")).copy(text = newText)
@@ -851,11 +844,11 @@ fun EditorScreen(
                                 }) {
                                     Text("A+", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 5. Font Size A- (@id/reduce_font)
+                                // 4. Font Size A- (@id/reduce_font)
                                 TextButton(onClick = { }) {
                                     Text("A-", fontWeight = FontWeight.Normal, fontSize = 12.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 6. Bold (@id/bold)
+                                // 5. Bold (@id/bold)
                                 IconButton(onClick = {
                                     doc?.let { d ->
                                         doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.BOLD)
@@ -864,7 +857,7 @@ fun EditorScreen(
                                 }) {
                                     SymbolIcon(Symbols.FORMAT_BOLD, size = 19.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 7. Italic (@id/italic)
+                                // 6. Italic (@id/italic)
                                 IconButton(onClick = {
                                     doc?.let { d ->
                                         doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.ITALIC)
@@ -873,7 +866,7 @@ fun EditorScreen(
                                 }) {
                                     SymbolIcon(Symbols.FORMAT_ITALIC, size = 19.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 8. Underline (@id/underline)
+                                // 7. Underline (@id/underline)
                                 IconButton(onClick = {
                                     doc?.let { d ->
                                         doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.UNDERLINE)
@@ -882,25 +875,11 @@ fun EditorScreen(
                                 }) {
                                     SymbolIcon(Symbols.FORMAT_UNDERLINED, size = 19.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 9. Strikethrough (@id/strikethrough)
-                                IconButton(onClick = {
-                                    doc?.let { d ->
-                                        doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.STRIKETHROUGH)
-                                        persist()
-                                    }
-                                }) {
-                                    SymbolIcon(Symbols.FORMAT_STRIKETHROUGH, size = 19.sp, color = cardTheme.onContainerColor)
+                                // 8. Strikethrough (@id/strikethrough)
+                                TextButton(onClick = { }) {
+                                    Text("S", textDecoration = TextDecoration.LineThrough, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 10. Background Highlight (@id/bg_highlight)
-                                IconButton(onClick = {
-                                    doc?.let { d ->
-                                        doc = toggleSpan(d, 0, d.text.length.coerceAtLeast(0), SpanStyleKind.HIGHLIGHT)
-                                        persist()
-                                    }
-                                }) {
-                                    SymbolIcon(Symbols.BRUSH, size = 19.sp, color = ThemeMainGold)
-                                }
-                                // 11. Bullet List (@id/bullet)
+                                // 9. Bullet List (@id/bullet)
                                 IconButton(onClick = {
                                     doc?.let { d ->
                                         doc = toggleParagraph(d, 0, ParagraphType.BULLET)
@@ -909,7 +888,7 @@ fun EditorScreen(
                                 }) {
                                     SymbolIcon(Symbols.FORMAT_LIST_BULLETED, size = 19.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 12. Numbered List (@id/listbullet)
+                                // 10. Numbered List (@id/listbullet)
                                 IconButton(onClick = {
                                     doc?.let { d ->
                                         doc = toggleParagraph(d, 0, ParagraphType.NUMBERED)
@@ -918,52 +897,31 @@ fun EditorScreen(
                                 }) {
                                     SymbolIcon(Symbols.FORMAT_LIST_NUMBERED, size = 19.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 13. Divider Line (@id/split_line)
-                                IconButton(onClick = {
-                                    val divider = "
-──────────
-"
+                                // 11. Divider Line (@id/split_line)
+                                TextButton(onClick = {
+                                    val divider = "\n---\n"
                                     doc = (doc ?: RichDocument("")).let { it.copy(text = it.text + divider) }
                                     persist()
                                 }) {
-                                    SymbolIcon(Symbols.REMOVE, size = 19.sp, color = cardTheme.onContainerColor)
+                                    Text("──", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 14. Blockquote (@id/quote)
-                                IconButton(onClick = {
-                                    doc?.let { d ->
-                                        doc = toggleParagraph(d, 0, ParagraphType.QUOTE)
-                                        persist()
-                                    }
+                                // 12. Blockquote (@id/quote)
+                                TextButton(onClick = {
+                                    val quote = "\n> "
+                                    doc = (doc ?: RichDocument("")).let { it.copy(text = it.text + quote) }
+                                    persist()
                                 }) {
-                                    SymbolIcon(Symbols.FORMAT_QUOTE, size = 19.sp, color = cardTheme.onContainerColor)
+                                    Text("❝", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 15. Align Center (@id/center)
-                                IconButton(onClick = {
-                                    doc?.let { d ->
-                                        doc = toggleParagraph(d, 0, ParagraphType.CENTER)
-                                        persist()
-                                    }
-                                }) {
-                                    SymbolIcon(Symbols.FORMAT_ALIGN_CENTER, size = 19.sp, color = cardTheme.onContainerColor)
-                                }
-                                // 16. Align Right (@id/right)
-                                IconButton(onClick = {
-                                    doc?.let { d ->
-                                        doc = toggleParagraph(d, 0, ParagraphType.RIGHT)
-                                        persist()
-                                    }
-                                }) {
-                                    SymbolIcon(Symbols.FORMAT_ALIGN_RIGHT, size = 19.sp, color = cardTheme.onContainerColor)
-                                }
-                                // 17. Indent Right (@id/indentright)
+                                // 13. Indent Right (@id/indentright)
                                 IconButton(onClick = {
                                     val indented = "    "
                                     doc = (doc ?: RichDocument("")).let { it.copy(text = it.text + indented) }
                                     persist()
                                 }) {
-                                    SymbolIcon(Symbols.ARROW_FORWARD, size = 19.sp, color = cardTheme.onContainerColor)
+                                    SymbolIcon(Symbols.CHEVRON_RIGHT, size = 19.sp, color = cardTheme.onContainerColor)
                                 }
-                                // 18. Indent Left (@id/indentleft)
+                                // 14. Indent Left (@id/indentleft)
                                 IconButton(onClick = { }) {
                                     SymbolIcon(Symbols.ARROW_BACK, size = 19.sp, color = cardTheme.onContainerColor)
                                 }
