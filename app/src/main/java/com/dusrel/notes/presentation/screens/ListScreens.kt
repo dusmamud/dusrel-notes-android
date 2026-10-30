@@ -280,20 +280,32 @@ fun NotesListScreen(
                         .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Small Center Title (Collapses to Top Center on vertical scroll)
-                    AnimatedContent(
-                        targetState = pagerState.currentPage,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "CollapsedCenterTitle",
-                        modifier = Modifier.alpha(titleCollapseFraction)
-                    ) { page ->
+                    // Collapsed Dual Center Tabs (Collapses to Top Center on vertical scroll)
+                    Row(
+                        modifier = Modifier
+                            .alpha(titleCollapseFraction)
+                            .align(Alignment.Center),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val isNotes = pagerState.currentPage == 0
                         Text(
-                            text = if (page == 0) "Notes" else "Tasks",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = MaterialTheme.colorScheme.onBackground
+                            text = "Notes",
+                            fontSize = 17.sp,
+                            fontWeight = if (isNotes) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isNotes) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                            modifier = Modifier.clickable {
+                                coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                            }
+                        )
+                        Text(
+                            text = "Tasks",
+                            fontSize = 17.sp,
+                            fontWeight = if (!isNotes) FontWeight.Bold else FontWeight.Normal,
+                            color = if (!isNotes) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                            modifier = Modifier.clickable {
+                                coroutineScope.launch { pagerState.animateScrollToPage(1) }
+                            }
                         )
                     }
 
@@ -329,31 +341,41 @@ fun NotesListScreen(
                 }
             }
 
-            // Expanded Large Title Header (Collapses upwards & fades out on vertical scroll)
+            // Expanded Large Dual Tabs Header (Notes & Tasks side-by-side on left; collapses to center on vertical scroll)
             if (titleCollapseFraction < 0.99f) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .alpha((1f - titleCollapseFraction).coerceIn(0f, 1f))
                         .padding(
-                            start = 18.dp,
+                            start = 20.dp,
                             end = 18.dp,
                             top = (4 * (1f - titleCollapseFraction)).dp,
-                            bottom = (6 * (1f - titleCollapseFraction)).dp
+                            bottom = (8 * (1f - titleCollapseFraction)).dp
                         )
                 ) {
-                    AnimatedContent(
-                        targetState = pagerState.currentPage,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "ExpandedLargeTitle"
-                    ) { page ->
+                    val isNotesSelected = pagerState.currentPage == 0
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
                         Text(
-                            text = if (page == 0) "Notes" else "Tasks",
-                            style = MaterialTheme.typography.displayLarge.copy(
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = MaterialTheme.colorScheme.onBackground
+                            text = "Notes",
+                            fontSize = if (isNotesSelected) 28.sp else 20.sp,
+                            fontWeight = if (isNotesSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isNotesSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                            modifier = Modifier.clickable {
+                                coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                            }
+                        )
+                        Text(
+                            text = "Tasks",
+                            fontSize = if (!isNotesSelected) 28.sp else 20.sp,
+                            fontWeight = if (!isNotesSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (!isNotesSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                            modifier = Modifier.clickable {
+                                coroutineScope.launch { pagerState.animateScrollToPage(1) }
+                            }
                         )
                     }
                 }
@@ -575,80 +597,6 @@ fun NotesListScreen(
                 }
             }
 
-            // Bottom Navigation Bar (Persistent 60dp matching bottom_nav_menu.xml)
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
-                shadowElevation = 4.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .height(60.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val isNotesActive = pagerState.currentPage == 0
-                    val isTasksActive = pagerState.currentPage == 1
-
-                    // Notes Tab
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable {
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(0)
-                                }
-                            },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        SymbolIcon(
-                            codePoint = Symbols.DESCRIPTION,
-                            size = 22.sp,
-                            color = if (isNotesActive) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            filled = isNotesActive
-                        )
-                        Text(
-                            text = "Notes",
-                            fontSize = 11.sp,
-                            fontWeight = if (isNotesActive) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isNotesActive) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-
-                    // Tasks Tab
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable {
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(1)
-                                }
-                            },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        SymbolIcon(
-                            codePoint = Symbols.CHECKLIST,
-                            size = 22.sp,
-                            color = if (isTasksActive) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            filled = isTasksActive
-                        )
-                        Text(
-                            text = "Tasks",
-                            fontSize = 11.sp,
-                            fontWeight = if (isTasksActive) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isTasksActive) ThemeMainGold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-                }
-            }
         }
 
         // Single Primary Floating Action Button (FAB) matching modern phone architecture
@@ -660,7 +608,7 @@ fun NotesListScreen(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(end = 22.dp, bottom = 78.dp)
+                .padding(end = 20.dp, bottom = 24.dp)
         ) {
             FloatingActionButton(
                 onClick = {
