@@ -83,3 +83,4 @@ the build is proven. See `BUILD_REPORT.md` for exactly what was and was not veri
 Warning: if you forget your PIN, private notes cannot be recovered — the PIN itself is never stored, so there is no reset path.
 After 5 consecutive wrong PIN attempts the vault locks for 30 seconds, and the lock persists even if the app process dies.
 Tip: unlock the vault before exporting your library — locked private notes are excluded from a library export.
+Reminders show their path: exact alarms use `AlarmManager.setExactAndAllowWhileIdle` when the device grants exact alarms, otherwise they fall back to WorkManager and are shown as best-effort.
