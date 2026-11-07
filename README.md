@@ -81,3 +81,4 @@ written: Gradle cannot run there because Java TCP to the Gradle daemon is blocke
 (pinned 2026-10-05). CI (`.github/workflows/android-ci.yml`) is the first place
 the build is proven. See `BUILD_REPORT.md` for exactly what was and was not verified.
 Warning: if you forget your PIN, private notes cannot be recovered — the PIN itself is never stored, so there is no reset path.
+After 5 consecutive wrong PIN attempts the vault locks for 30 seconds, and the lock persists even if the app process dies.
